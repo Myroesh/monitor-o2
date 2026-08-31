@@ -1,0 +1,602 @@
+/* ============================================================
+   O₂ Monitor — app.css
+   Estilos propios mínimos para la Fase 1.
+   Sin frameworks externos.
+   ============================================================ */
+
+/* --- Reset & base ------------------------------------------ */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --color-bg:        #0f1117;
+    --color-surface:   #1a1d27;
+    --color-border:    #2a2d3a;
+    --color-accent:    #3b82f6;
+    --color-accent-hv: #60a5fa;
+    --color-text:      #e2e8f0;
+    --color-muted:     #64748b;
+
+    --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+    --radius:    8px;
+    --max-width: 960px;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+/* --- Header ------------------------------------------------- */
+.site-header {
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+}
+
+.site-logo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: 0.02em;
+}
+
+/* --- Navigation -------------------------------------------- */
+.site-nav {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.nav-link {
+    padding: 0.35rem 0.9rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.nav-link:hover {
+    color: var(--color-text);
+    background-color: var(--color-border);
+}
+
+.nav-link.active {
+    color: var(--color-accent-hv);
+    background-color: rgba(59, 130, 246, 0.12);
+}
+
+/* --- Main content ------------------------------------------ */
+.site-main {
+    flex: 1;
+    max-width: var(--max-width);
+    width: 100%;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+}
+
+.page-section h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+}
+
+.placeholder-text {
+    color: var(--color-muted);
+    font-size: 0.95rem;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    background-color: var(--color-surface);
+    line-height: 1.8;
+}
+
+/* --- Footer ------------------------------------------------- */
+.site-footer {
+    text-align: center;
+    padding: 1rem 1.5rem;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    border-top: 1px solid var(--color-border);
+}
+
+/* ============================================================
+   Monitor page — Phase 2
+   ============================================================ */
+
+/* Status badge */
+.monitor-status-row {
+    margin-bottom: 1.5rem;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.status-ok  { background: rgba(16,185,129,0.15); color: #10b981; }
+.status-err { background: rgba(239,68,68,0.15);  color: #ef4444; }
+
+/* Metric cards */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.metric-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.metric-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+/* Chart section */
+.chart-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+}
+
+.chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.chart-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.curve-select {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.curve-select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 280px;
+}
+
+/* ============================================================
+   Calibration page — Phase 3
+   ============================================================ */
+
+.status-pending { background: rgba(100,116,139,0.2); color: var(--color-muted); }
+
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stepper-container {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+}
+
+.stepper-item {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.stepper-item.active {
+    border-color: var(--color-accent);
+    color: var(--color-accent-hv);
+    background: rgba(59, 130, 246, 0.1);
+    font-weight: 600;
+}
+
+.stepper-item.completed {
+    border-color: #10b981;
+    color: #10b981;
+}
+
+.wizard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.wizard-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+    color: var(--color-muted);
+}
+
+.input-with-unit {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.input-with-unit input {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.8rem;
+    font-size: 1rem;
+    width: 140px;
+}
+
+.input-with-unit input:focus {
+    outline: 2px solid var(--color-accent);
+}
+
+.unit-label {
+    font-size: 0.9rem;
+    color: var(--color-muted);
+}
+
+.measure-control {
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.measure-status {
+    font-size: 0.9rem;
+    color: var(--color-accent-hv);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s ease;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary { background: var(--color-accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--color-accent-hv); }
+
+.btn-secondary { background: var(--color-border); color: var(--color-text); }
+.btn-secondary:hover:not(:disabled) { background: #3a3f52; }
+
+.btn-warning { background: #d97706; color: #fff; }
+.btn-warning:hover:not(:disabled) { background: #f59e0b; }
+
+.btn-success { background: #059669; color: #fff; }
+.btn-success:hover:not(:disabled) { background: #10b981; }
+
+.btn-sm { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+
+.wizard-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.stats-box {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-top: 1.25rem;
+}
+
+.stats-box h3 {
+    font-size: 0.9rem;
+    color: var(--color-muted);
+    margin-bottom: 0.75rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-label { font-size: 0.75rem; color: var(--color-muted); }
+.stat-val { font-size: 1rem; font-weight: 600; }
+
+.alert {
+    padding: 0.9rem 1.2rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.alert-info {
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--color-accent-hv);
+}
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.res-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.res-label { font-size: 0.75rem; color: var(--color-muted); text-transform: uppercase; }
+.res-val { font-size: 1.2rem; font-weight: 700; color: var(--color-accent-hv); }
+
+.table-wrapper {
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+
+.table-wrapper h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.table th, .table td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+    color: var(--color-muted);
+    font-weight: 600;
+}
+
+.results-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ============================================================
+   Configuration page — Phase 4
+   ============================================================ */
+
+.alert-danger {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.alert-success {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.info-label {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    font-weight: 500;
+}
+
+.info-val {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem;
+}
+
+.form-card h2 {
+    font-size: 1.15rem;
+    margin-bottom: 0.75rem;
+}
+
+.section-desc {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    margin-bottom: 1.25rem;
+}
+
+.field-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin-top: 0.25rem;
+}
+
+.divider-channels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.channel-box {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+}
+
+.channel-box h3 {
+    font-size: 0.95rem;
+    color: var(--color-accent-hv);
+    margin-bottom: 1rem;
+
+}
+
+.channel-box input {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.75rem;
+    font-size: 0.95rem;
+    width: 100%;
+}
+
+.channel-box input:focus {
+    outline: 2px solid var(--color-accent);
+}
+
+.calc-group {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.6rem 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.calc-label {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    font-weight: 500;
+}
+
+.calc-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-accent-hv);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+

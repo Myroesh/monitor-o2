@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración{% endblock %}
+
+{% block content %}
+<section class="page-section configuration-page">
+    <h1>Configuración e información del equipo</h1>
+
+    <div class="alert alert-info">
+        <strong>Modo Simulación:</strong> Los parámetros editados se mantendrán en la memoria del cliente simulado. La escritura real en la memoria NVS del ESP32 se realizará en fases posteriores.
+    </div>
+
+    <!-- Alert message feedback -->
+    <div id="config-alert" class="alert hidden"></div>
+
+    <!-- Card 1: Read-only Device Information -->
+    <div class="card info-card">
+        <h2>Estado e Información del Dispositivo</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Estado ESP32:</span>
+                <span id="info-status" class="info-val status-badge status-ok">Conectado (Simulado)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Versión Firmware:</span>
+                <span id="info-firmware" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Uptime:</span>
+                <span id="info-uptime" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">ADS1115 e Dirección:</span>
+                <span id="info-ads1115" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Tasa ADS1115:</span>
+                <span id="info-ads-rate" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Vs MPX:</span>
+                <span id="info-vs-mpx" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Origen de Calibración:</span>
+                <span id="info-calib-origin" class="info-val">—</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Tramas OCS-3F:</span>
+                <span id="info-ocs-frames" class="info-val">—</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form for Editable Parameters -->
+    <form id="config-form" onsubmit="return false;">
+        <!-- Card 2: Calibration Parameters -->
+        <div class="card form-card">
+            <h2>Parámetros de Calibración</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="input-gain">GAIN (Ganancia):</label>
+                    <input type="number" id="input-gain" step="0.000001" min="0.101" max="9.999" required />
+                    <span class="field-hint">Plausible: 0.10 a 10.0</span>
+                </div>
+                <div class="form-group">
+                    <label for="input-offset">OFFSET (kPa):</label>
+                    <input type="number" id="input-offset" step="0.000001" min="-499.99" max="499.99" required />
+                    <span class="field-hint">Plausible: -500.0 a 500.0 kPa</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Voltage Divider Resistors & Ratios -->
+        <div class="card form-card">
+            <h2>Divisores de Tensión (Resistencias y Ratios Calculados)</h2>
+            <p class="section-desc">Los ratios se recalculan automáticamente a partir de las resistencias de cada canal.</p>
+
+            <div class="divider-channels-grid">
+                <!-- Canal AIN0 -->
+                <div class="channel-box">
+                    <h3>Canal AIN0 (Presión)</h3>
+                    <div class="form-group">
+                        <label for="input-rtop-ain0">Rtop AIN0 (Ω):</label>
+                        <input type="number" id="input-rtop-ain0" step="1" min="10" max="10000000" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="input-rbottom-ain0">Rbottom AIN0 (Ω):</label>
+                        <input type="number" id="input-rbottom-ain0" step="1" min="10" max="10000000" required />
+                    </div>
+                    <div class="form-group calc-group">
+                        <span class="calc-label">Ratio AIN0 (Calculado):</span>
+                        <span id="calc-ratio-ain0" class="calc-val">—</span>
+                    </div>
+                </div>
+
+                <!-- Canal AIN1 -->
+                <div class="channel-box">
+                    <h3>Canal AIN1 (Vs MPX)</h3>
+                    <div class="form-group">
+                        <label for="input-rtop-ain1">Rtop AIN1 (Ω):</label>
+                        <input type="number" id="input-rtop-ain1" step="1" min="10" max="10000000" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="input-rbottom-ain1">Rbottom AIN1 (Ω):</label>
+                        <input type="number" id="input-rbottom-ain1" step="1" min="10" max="10000000" required />
+                    </div>
+                    <div class="form-group calc-group">
+                        <span class="calc-label">Ratio AIN1 (Calculado):</span>
+                        <span id="calc-ratio-ain1" class="calc-val">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-actions">
+            <button type="button" id="btn-save-config" class="btn btn-primary">
+                Guardar cambios en simulación
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/configuration.js') }}"></script>
+{% endblock %}

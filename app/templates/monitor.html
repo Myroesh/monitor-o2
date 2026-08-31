@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Monitor{% endblock %}
+
+{% block content %}
+<section class="page-section monitor-page">
+    <h1>Monitor en tiempo real</h1>
+
+    <!-- Status badge -->
+    <div class="monitor-status-row">
+        <span id="val-status" class="status-badge status-err">Conectando…</span>
+    </div>
+
+    <!-- Metric cards grid -->
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">O₂</span>
+            <span id="val-o2" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Flujo</span>
+            <span id="val-flow" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Temperatura</span>
+            <span id="val-temp" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">P calibrada</span>
+            <span id="val-p-calibrated" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Vs MPX</span>
+            <span id="val-vs-mpx" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">P nominal</span>
+            <span id="val-p-nominal" class="metric-value">—</span>
+        </div>
+    </div>
+
+    <!-- Chart section -->
+    <div class="chart-section">
+        <div class="chart-header">
+            <span class="chart-title">Presión — últimos 60 s</span>
+            <select id="curve-select" class="curve-select" aria-label="Seleccionar curva de presión">
+                <option value="p_calibrated">P calibrada</option>
+                <option value="p_ema">P EMA</option>
+                <option value="p_nominal">P nominal</option>
+            </select>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="pressure-chart" aria-label="Gráfica de presión"></canvas>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+{% endblock %}

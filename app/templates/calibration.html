@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Calibración{% endblock %}
+
+{% block content %}
+<section class="page-section calibration-page">
+    <h1>Calibración del sensor (guiada)</h1>
+
+    <!-- Stepper indicator bar -->
+    <div id="calibration-stepper" class="stepper-container">
+        <!-- Filled dynamically by JS -->
+    </div>
+
+    <!-- Active Step Wizard Card -->
+    <div id="wizard-card" class="card wizard-card">
+        <div class="wizard-header">
+            <h2 id="wizard-step-title">Paso 1 de 7 — Punto 0 mmHg</h2>
+            <span id="wizard-step-badge" class="status-badge status-pending">Pendiente</span>
+        </div>
+
+        <div class="wizard-body">
+            <div class="form-group">
+                <label for="observed-mmhg-input">Presión real observada (mmHg):</label>
+                <div class="input-with-unit">
+                    <input type="number" id="observed-mmhg-input" step="0.1" value="0.0" />
+                    <span class="unit-label">mmHg (<span id="observed-kpa-label">0.0000</span> kPa)</span>
+                </div>
+            </div>
+
+            <div class="measure-control">
+                <button type="button" id="btn-start-measure" class="btn btn-primary">
+                    Comenzar medición
+                </button>
+                <div id="measure-status" class="measure-status hidden">
+                    <span class="spinner"></span>
+                    <span id="measure-status-text">Capturando 10 muestras consecutivas...</span>
+                </div>
+            </div>
+
+            <!-- Measured sample statistics -->
+            <div id="stats-box" class="stats-box hidden">
+                <h3>Estadísticas de la medición</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Promedio:</span>
+                        <span id="stat-mean" class="stat-val">—</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Desv. Estándar:</span>
+                        <span id="stat-std" class="stat-val">—</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mínimo:</span>
+                        <span id="stat-min" class="stat-val">—</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Máximo:</span>
+                        <span id="stat-max" class="stat-val">—</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Muestras:</span>
+                        <span id="stat-count" class="stat-val">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="wizard-footer">
+            <button type="button" id="btn-prev-step" class="btn btn-secondary">
+                Paso anterior
+            </button>
+            <button type="button" id="btn-repeat-step" class="btn btn-warning">
+                Repetir paso
+            </button>
+            <button type="button" id="btn-next-step" class="btn btn-success">
+                Aceptar y continuar
+            </button>
+        </div>
+    </div>
+
+    <!-- Final Results Section (Hidden until wizard completes) -->
+    <div id="results-card" class="card results-card hidden">
+        <h2>Resultados de la Calibración</h2>
+
+        <div class="alert alert-info">
+            <strong>Nota:</strong> GAIN y OFFSET calculados. El envío al ESP32 se realizará en fases posteriores.
+        </div>
+
+        <!-- Calculated parameters summary -->
+        <div class="results-grid">
+            <div class="res-card">
+                <span class="res-label">GAIN</span>
+                <span id="res-gain" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">OFFSET</span>
+                <span id="res-offset" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">R²</span>
+                <span id="res-r2" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Error Máximo</span>
+                <span id="res-max-error" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Error Medio Absoluto (MAE)</span>
+                <span id="res-mae" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Repetibilidad</span>
+                <span id="res-repeatability" class="res-val">—</span>
+            </div>
+        </div>
+
+        <!-- Points summary table -->
+        <div class="table-wrapper">
+            <h3>Detalle por Punto de Calibración</h3>
+            <table class="table" id="points-table">
+                <thead>
+                    <tr>
+                        <th>Punto</th>
+                        <th>Objetivo (mmHg)</th>
+                        <th>Real Observada (mmHg)</th>
+                        <th>Real Observada (kPa)</th>
+                        <th>Medido Sensor (kPa)</th>
+                        <th>Residuo / Error (kPa)</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="points-table-body">
+                    <!-- Filled dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="results-actions">
+            <button type="button" id="btn-restart-calibration" class="btn btn-secondary">
+                Reiniciar Calibración completa
+            </button>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/calibration.js') }}"></script>
+{% endblock %}

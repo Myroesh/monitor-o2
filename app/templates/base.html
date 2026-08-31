@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Monitor de sensor de oxígeno basado en ESP32" />
+    <title>{% block title %}Sensor O₂{% endblock %} — O₂ Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner">
+            <span class="site-logo">O₂ Monitor</span>
+            <nav class="site-nav" aria-label="Navegación principal">
+                <a href="{{ url_for('monitor.index') }}"
+                   class="nav-link {% if request.blueprint == 'monitor' %}active{% endif %}">
+                    Monitor
+                </a>
+                <a href="{{ url_for('calibration.index') }}"
+                   class="nav-link {% if request.blueprint == 'calibration' %}active{% endif %}">
+                    Calibración
+                </a>
+                <a href="{{ url_for('configuration.index') }}"
+                   class="nav-link {% if request.blueprint == 'configuration' %}active{% endif %}">
+                    Configuración
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="site-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <p>O₂ Monitor — Fase 2</p>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
