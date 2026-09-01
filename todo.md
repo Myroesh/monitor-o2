@@ -103,32 +103,36 @@
 
 ## Fase 6 — Firmware ESP32 para modo PC
 
-- [ ] Guardar firmware actual como respaldo antes de modificar.
-- [ ] Retirar WiFiManager de la arquitectura final.
-- [ ] Mantener Preferences/NVS.
-- [ ] Mantener OCS-3F sin modificar parser.
-- [ ] Mantener ADS1115 no bloqueante a 128 SPS.
-- [ ] Mantener EMA `alpha = 0.15`.
-- [ ] GPIO27 corto → siguiente pantalla.
-- [ ] GPIO27 largo ~3 s → activar modo PC.
-- [ ] GPIO27 largo con modo PC activo → apagar modo PC inmediatamente.
-- [ ] SoftAP WPA2 solo durante modo PC.
-- [ ] IP esperada del ESP32: `192.168.4.1`.
-- [ ] WebSocket para Flask.
-- [ ] LCD: sin icono = Wi-Fi apagado; parpadeando = esperando Flask; fijo = Flask conectado.
-- [ ] ESP32 debe seguir funcionando autónomamente sin Flask.
+- [ ] Guardar firmware actual como respaldo antes de modificar. *(Tarea histórica previa a la modificación; se conserva como referencia documental o a sustituir por respaldo/tag de la versión estable actual)*
+- [x] Retirar WiFiManager de la arquitectura final.
+- [x] Mantener Preferences/NVS.
+- [x] Mantener OCS-3F sin modificar parser.
+- [x] Mantener ADS1115 no bloqueante a 128 SPS.
+- [x] Mantener EMA `alpha = 0.15`.
+- [x] GPIO27 corto → siguiente pantalla.
+- [x] GPIO27 largo ~3 s → activar modo PC.
+- [x] GPIO27 largo con modo PC activo → apagar modo PC inmediatamente.
+- [x] SoftAP WPA2 solo durante modo PC.
+- [x] IP esperada del ESP32: `192.168.4.1`.
+- [x] WebSocket para Flask.
+- [x] LCD: sin icono = Wi-Fi apagado; parpadeando = esperando Flask; fijo = Flask conectado.
+- [x] ESP32 debe seguir funcionando autónomamente sin Flask.
+
+**Estado:** FUNCIONALMENTE COMPLETADA Y VALIDADA CON HARDWARE REAL.
 
 ## Fase 7 — Integración real
 
-- [ ] Verificar acceso desde Docker al ESP32 `192.168.4.1`.
-- [ ] Conectar PC al SoftAP del ESP32.
-- [ ] Reemplazar simulador por WebSocket real.
-- [ ] Validar monitor en vivo.
-- [ ] Validar calibración completa.
+- [x] Verificar acceso desde Docker al ESP32 `192.168.4.1`.
+- [x] Conectar PC al SoftAP del ESP32.
+- [x] Reemplazar simulador por WebSocket real.
+- [x] Validar monitor en vivo. *(Comprobados físicamente en hardware real: presión, O₂, flujo, ventana ~60 s y selector P calibrada / EMA / nominal)*
+- [x] Validar calibración completa. *(Calibración guiada de 7 puntos probada y funcional con hardware real; la calibración metrológica definitiva se realizará con la fuente de alimentación final ya que el cero depende de ella)*
 - [ ] Aplicar GAIN/OFFSET desde Flask.
-- [ ] Verificar guardado NVS.
+- [x] Verificar guardado NVS. *(Verificado mediante reescritura segura de los mismos valores activos + ACK nvs_verified + comprobación de readback)*
 - [ ] Reiniciar ESP32 y verificar persistencia.
-- [ ] Validar reconexión.
+- [x] Validar reconexión.
+
+**Estado:** EN PROGRESO / PARCIALMENTE VALIDADA. Integración física de telemetría en vivo, WebSocket real y prueba segura de guardado NVS completados.
 
 ## Fase 8 — Persistencia e historial en PC
 
