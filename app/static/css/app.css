@@ -183,6 +183,28 @@ body {
 }
 
 /* Chart section */
+.charts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.chart-full-width {
+    width: 100%;
+}
+
+.charts-row-half {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .charts-row-half {
+        grid-template-columns: 1fr;
+    }
+}
+
 .chart-section {
     background: var(--color-surface);
     border: 1px solid var(--color-border);

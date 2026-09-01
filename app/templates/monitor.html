@@ -39,18 +39,44 @@
         </div>
     </div>
 
-    <!-- Chart section -->
-    <div class="chart-section">
-        <div class="chart-header">
-            <span class="chart-title">Presión — últimos 60 s</span>
-            <select id="curve-select" class="curve-select" aria-label="Seleccionar curva de presión">
-                <option value="p_calibrated">P calibrada</option>
-                <option value="p_ema">P EMA</option>
-                <option value="p_nominal">P nominal</option>
-            </select>
+    <!-- Charts container -->
+    <div class="charts-grid">
+        <!-- Chart 1: Presión (Full width on top) -->
+        <div class="chart-section chart-full-width">
+            <div class="chart-header">
+                <span class="chart-title">Presión — últimos 60 s</span>
+                <select id="curve-select" class="curve-select" aria-label="Seleccionar curva de presión">
+                    <option value="p_calibrated">P calibrada</option>
+                    <option value="p_ema">P EMA</option>
+                    <option value="p_nominal">P nominal</option>
+                </select>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="pressure-chart" aria-label="Gráfica de presión"></canvas>
+            </div>
         </div>
-        <div class="chart-wrapper">
-            <canvas id="pressure-chart" aria-label="Gráfica de presión"></canvas>
+
+        <!-- Row for O2 and Flow (2 columns desktop, 1 column mobile) -->
+        <div class="charts-row-half">
+            <!-- Chart 2: Pureza de Oxígeno -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <span class="chart-title">Pureza de O₂ — últimos 60 s</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="o2-chart" aria-label="Gráfica de pureza de O2"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Flujo -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <span class="chart-title">Flujo — últimos 60 s</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="flow-chart" aria-label="Gráfica de flujo"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 </section>

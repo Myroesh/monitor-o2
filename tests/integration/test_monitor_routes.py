@@ -32,3 +32,9 @@ class TestMonitorRoutes:
         """The API must NOT be reachable under /monitor/api/telemetry."""
         response = client.get("/monitor/api/telemetry")
         assert response.status_code == 404
+
+    def test_monitor_page_contains_all_three_chart_canvases(self, client):
+        response = client.get("/monitor/")
+        assert b'id="pressure-chart"' in response.data
+        assert b'id="o2-chart"' in response.data
+        assert b'id="flow-chart"' in response.data
