@@ -1,12 +1,18 @@
 /**
- * configuration.js — Phase 4 (Audited & Firmware-Aligned)
+ * configuration.js — Phase 4 & Phase 5 (Audited & Firmware-Aligned)
  * Manages device configuration UI, parameter validation, real-time ratio calculations,
- * explicit user confirmation, and REST API communication.
+ * mode status handling (Simulated vs Real Hardware), explicit user confirmation,
+ * and REST API communication.
  */
 
 "use strict";
 
 const dom = {
+    // Mode status banner
+    modeBanner: document.getElementById("mode-banner"),
+    modeTitle: document.getElementById("mode-title"),
+    modeDesc: document.getElementById("mode-desc"),
+
     // Info fields
     infoStatus: document.getElementById("info-status"),
     infoFirmware: document.getElementById("info-firmware"),
@@ -29,6 +35,7 @@ const dom = {
 
     // Actions & Alert
     btnSaveConfig: document.getElementById("btn-save-config"),
+    btnVerifyNvs: document.getElementById("btn-verify-nvs"),
     configAlert: document.getElementById("config-alert"),
 };
 
@@ -67,7 +74,9 @@ function updateCalculatedRatios() {
 
 // Recalculate ratios live on input change
 [dom.inputRtopAin0, dom.inputRbottomAin0, dom.inputRtopAin1, dom.inputRbottomAin1].forEach(input => {
-    input.addEventListener("input", updateCalculatedRatios);
+    if (input) {
+        input.addEventListener("input", updateCalculatedRatios);
+    }
 });
 
 function showAlert(message, isError = false) {
@@ -81,6 +90,51 @@ async function loadConfig() {
         const res = await fetch("/api/config");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+
+        const isSim = data.is_simulated !== false;
+
+        // Render mode banner and toggle input editability
+        if (isSim) {
+            if (dom.modeBanner) {
+                dom.modeBanner.className = "alert alert-info";
+            }
+            if (dom.modeTitle) dom.modeTitle.textContent = "Modo Simulación:";
+            if (dom.modeDesc) dom.modeDesc.textContent = "Los parámetros editados se mantendrán en la memoria del cliente simulado. La escritura real en la memoria NVS del ESP32 se realizará en fases posteriores.";
+
+            // Enable inputs
+            [dom.inputGain, dom.inputOffset, dom.inputRtopAin0, dom.inputRbottomAin0, dom.inputRtopAin1, dom.inputRbottomAin1].forEach(input => {
+                if (input) input.disabled = false;
+            });
+
+            // Enable save button
+            if (dom.btnSaveConfig) {
+                dom.btnSaveConfig.disabled = false;
+                dom.btnSaveConfig.textContent = "Guardar cambios en simulación";
+            }
+        } else {
+            if (dom.modeBanner) {
+                dom.modeBanner.className = "alert alert-warning";
+            }
+            if (dom.modeTitle) dom.modeTitle.textContent = "Modo Hardware Real (WebSocket):";
+            if (dom.modeDesc) dom.modeDesc.textContent = "Modo Hardware Real (WebSocket). Las escrituras NVS requieren confirmación y verificación de lectura posterior.";
+
+            // Disable inputs
+            [dom.inputGain, dom.inputOffset, dom.inputRtopAin0, dom.inputRbottomAin0, dom.inputRtopAin1, dom.inputRbottomAin1].forEach(input => {
+                if (input) input.disabled = true;
+            });
+
+            // Disable save button for manual edits in real mode
+            if (dom.btnSaveConfig) {
+                dom.btnSaveConfig.disabled = true;
+                dom.btnSaveConfig.textContent = "Escritura NVS deshabilitada (Usar prueba segura)";
+            }
+
+            // Show and configure safe NVS verify button
+            if (dom.btnVerifyNvs) {
+                dom.btnVerifyNvs.classList.remove("hidden");
+                dom.btnVerifyNvs.disabled = !data.connected;
+            }
+        }
 
         // Render read-only device information
         dom.infoStatus.textContent = data.status || (data.connected ? "Conectado" : "Desconectado");
@@ -107,78 +161,112 @@ async function loadConfig() {
     }
 }
 
-dom.btnSaveConfig.addEventListener("click", async () => {
-    const gain = parseFloat(dom.inputGain.value);
-    const offset = parseFloat(dom.inputOffset.value);
-    const rtop0 = parseFloat(dom.inputRtopAin0.value);
-    const rbottom0 = parseFloat(dom.inputRbottomAin0.value);
-    const rtop1 = parseFloat(dom.inputRtopAin1.value);
-    const rbottom1 = parseFloat(dom.inputRbottomAin1.value);
+if (dom.btnSaveConfig) {
+    dom.btnSaveConfig.addEventListener("click", async () => {
+        const gain = parseFloat(dom.inputGain.value);
+        const offset = parseFloat(dom.inputOffset.value);
+        const rtop0 = parseFloat(dom.inputRtopAin0.value);
+        const rbottom0 = parseFloat(dom.inputRbottomAin0.value);
+        const rtop1 = parseFloat(dom.inputRtopAin1.value);
+        const rbottom1 = parseFloat(dom.inputRbottomAin1.value);
 
-    // Client-side format & range validation (aligned with firmware)
-    if (isNaN(gain) || gain <= 0.10 || gain >= 10.0) {
-        showAlert("GAIN debe estar estrictamente entre 0.10 y 10.0", true);
-        return;
-    }
-    if (isNaN(offset) || offset <= -500.0 || offset >= 500.0) {
-        showAlert("OFFSET debe estar estrictamente entre -500.0 y 500.0 kPa", true);
-        return;
-    }
-    if ([rtop0, rbottom0, rtop1, rbottom1].some(r => isNaN(r) || r < 100 || r > 1000000)) {
-        showAlert("Las resistencias deben estar entre 100 Ω y 1,000,000 Ω", true);
-        return;
-    }
-
-    const ratio0 = rbottom0 / (rtop0 + rbottom0);
-    const ratio1 = rbottom1 / (rtop1 + rbottom1);
-
-    if (ratio0 <= 0.05 || ratio0 >= 0.95 || ratio1 <= 0.05 || ratio1 >= 0.95) {
-        showAlert("Los ratios calculados deben estar estrictamente entre 0.05 y 0.95", true);
-        return;
-    }
-
-    // Explicit user confirmation prompt required by specification
-    const confirmed = window.confirm(
-        "Confirmación de Cambios:\n\n" +
-        "¿Está seguro de que desea aplicar estos nuevos parámetros a la simulación actual?\n\n" +
-        `GAIN: ${gain}\n` +
-        `OFFSET: ${offset} kPa\n` +
-        `Rtop AIN0: ${rtop0} Ω / Rbottom AIN0: ${rbottom0} Ω (Ratio: ${ratio0.toFixed(6)})\n` +
-        `Rtop AIN1: ${rtop1} Ω / Rbottom AIN1: ${rbottom1} Ω (Ratio: ${ratio1.toFixed(6)})`
-    );
-
-    if (!confirmed) return;
-
-    const payload = {
-        gain: gain,
-        offset: offset,
-        rtop_ain0: rtop0,
-        rbottom_ain0: rbottom0,
-        rtop_ain1: rtop1,
-        rbottom_ain1: rbottom1,
-    };
-
-    try {
-        dom.btnSaveConfig.disabled = true;
-        const res = await fetch("/api/config", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-            throw new Error(data.error || `HTTP ${res.status}`);
+        // Client-side format & range validation (aligned with firmware)
+        if (isNaN(gain) || gain <= 0.10 || gain >= 10.0) {
+            showAlert("GAIN debe estar strictly entre 0.10 y 10.0", true);
+            return;
+        }
+        if (isNaN(offset) || offset <= -500.0 || offset >= 500.0) {
+            showAlert("OFFSET debe estar estrictamente entre -500.0 y 500.0 kPa", true);
+            return;
+        }
+        if ([rtop0, rbottom0, rtop1, rbottom1].some(r => isNaN(r) || r < 100 || r > 1000000)) {
+            showAlert("Las resistencias deben estar entre 100 Ω y 1,000,000 Ω", true);
+            return;
         }
 
-        showAlert("Configuración guardada exitosamente en la simulación.");
-        loadConfig();
-    } catch (err) {
-        showAlert(`Error al guardar configuración: ${err.message}`, true);
-    } finally {
-        dom.btnSaveConfig.disabled = false;
-    }
-});
+        const ratio0 = rbottom0 / (rtop0 + rbottom0);
+        const ratio1 = rbottom1 / (rtop1 + rbottom1);
+
+        if (ratio0 <= 0.05 || ratio0 >= 0.95 || ratio1 <= 0.05 || ratio1 >= 0.95) {
+            showAlert("Los ratios calculados deben estar estrictamente entre 0.05 y 0.95", true);
+            return;
+        }
+
+        // Explicit user confirmation prompt required by specification
+        const confirmed = window.confirm(
+            "Confirmación de Cambios:\n\n" +
+            "¿Está seguro de que desea aplicar estos nuevos parámetros a la simulación actual?\n\n" +
+            `GAIN: ${gain}\n` +
+            `OFFSET: ${offset} kPa\n` +
+            `Rtop AIN0: ${rtop0} Ω / Rbottom AIN0: ${rbottom0} Ω (Ratio: ${ratio0.toFixed(6)})\n` +
+            `Rtop AIN1: ${rtop1} Ω / Rbottom AIN1: ${rbottom1} Ω (Ratio: ${ratio1.toFixed(6)})`
+        );
+
+        if (!confirmed) return;
+
+        const payload = {
+            gain: gain,
+            offset: offset,
+            rtop_ain0: rtop0,
+            rbottom_ain0: rbottom0,
+            rtop_ain1: rtop1,
+            rbottom_ain1: rbottom1,
+        };
+
+        try {
+            dom.btnSaveConfig.disabled = true;
+            const res = await fetch("/api/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || `HTTP ${res.status}`);
+            }
+
+            showAlert("Configuración guardada exitosamente en la simulación.");
+            loadConfig();
+        } catch (err) {
+            showAlert(`Error al guardar configuración: ${err.message}`, true);
+        } finally {
+            dom.btnSaveConfig.disabled = false;
+        }
+    });
+}
+
+if (dom.btnVerifyNvs) {
+    dom.btnVerifyNvs.addEventListener("click", async () => {
+        const confirmed = window.confirm(
+            "Prueba Segura de Escritura NVS:\n\n" +
+            "Se enviará una trama set_calibration al ESP32 utilizando exactamente los mismos parámetros de calibración activos actualmente y se comprobará el ACK nvs_verified y la lectura posterior (readback).\n\n" +
+            "¿Desea continuar con la prueba?"
+        );
+
+        if (!confirmed) return;
+
+        try {
+            dom.btnVerifyNvs.disabled = true;
+            const res = await fetch("/api/config/verify-nvs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || `HTTP ${res.status}`);
+            }
+
+            showAlert("Escritura en NVS verificada exitosamente en el ESP32.");
+            loadConfig();
+        } catch (err) {
+            showAlert(`Error al verificar escritura NVS: ${err.message}`, true);
+        } finally {
+            dom.btnVerifyNvs.disabled = false;
+        }
+    });
+}
 
 // Initial load
 loadConfig();

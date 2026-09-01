@@ -93,3 +93,25 @@ class TestCalibrationApi:
         assert "r_squared" in data["results"]
         assert "residuals" in data["results"]
         assert "repeatability" in data["results"]
+
+    def test_calibration_apply_api_incomplete_calibration_error(self, client):
+        client.post("/api/calibration/start")
+        res = client.post("/api/calibration/apply")
+        assert res.status_code == 400
+        data = res.get_json()
+        assert "error" in data
+        assert "no está completa" in data["error"]
+
+    def test_calibration_apply_api_success(self, client):
+        client.post("/api/calibration/start")
+        service = get_calibration_service()
+        targets_mmhg = [0, 50, 100, 150, 200, 250, 300]
+        for idx, target in enumerate(targets_mmhg):
+            service.set_step_samples(idx, [mmhg_to_kpa(target)] * 10)
+
+        res = client.post("/api/calibration/apply")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["status"] == "success"
+        assert "calibration" in data
+        assert "gain" in data["calibration"]

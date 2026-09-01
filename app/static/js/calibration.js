@@ -1,7 +1,7 @@
 /**
- * calibration.js — Phase 3 (Audited & Refined)
+ * calibration.js — Phase 3 & Phase 5 (Audited & Refined)
  * Manages guided calibration wizard, time-window non-blocking sample measurement,
- * and results rendering.
+ * results rendering, and real hardware NVS calibration application.
  */
 
 "use strict";
@@ -36,6 +36,17 @@ const dom = {
     resRepeatability: document.getElementById("res-repeatability"),
     pointsTableBody: document.getElementById("points-table-body"),
     btnRestartCalibration: document.getElementById("btn-restart-calibration"),
+
+    // Apply NVS real hardware elements
+    applyNvsContainer: document.getElementById("apply-nvs-container"),
+    btnApplyCalibration: document.getElementById("btn-apply-calibration"),
+    applyNvsAlert: document.getElementById("apply-nvs-alert"),
+    applyNvsVerifiedInfo: document.getElementById("apply-nvs-verified-info"),
+    nvsGain: document.getElementById("nvs-gain"),
+    nvsOffset: document.getElementById("nvs-offset"),
+    nvsRatio0: document.getElementById("nvs-ratio0"),
+    nvsRatio1: document.getElementById("nvs-ratio1"),
+    nvsOrigin: document.getElementById("nvs-origin"),
 };
 
 let currentState = null;
@@ -272,9 +283,32 @@ function renderWizard() {
     dom.btnPrevStep.disabled = curStep === 0;
 }
 
+async function checkHardwareModeAndShowApplyButton() {
+    if (!currentState || currentState.status !== "completed" || !currentState.results) {
+        if (dom.applyNvsContainer) dom.applyNvsContainer.classList.add("hidden");
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/config");
+        if (!res.ok) return;
+        const cfg = await res.json();
+
+        // Show apply container only in real WebSocket mode when ESP32 is connected
+        if (cfg.is_simulated === false && cfg.connected) {
+            if (dom.applyNvsContainer) dom.applyNvsContainer.classList.remove("hidden");
+        } else {
+            if (dom.applyNvsContainer) dom.applyNvsContainer.classList.add("hidden");
+        }
+    } catch (err) {
+        console.error("Error comprobando modo de dispositivo:", err);
+    }
+}
+
 function renderResults() {
     if (!currentState || !currentState.results) {
         dom.resultsCard.classList.add("hidden");
+        if (dom.applyNvsContainer) dom.applyNvsContainer.classList.add("hidden");
         return;
     }
 
@@ -317,6 +351,66 @@ function renderResults() {
             const idx = parseInt(e.target.getAttribute("data-idx"), 10);
             repeatPointFromResults(idx);
         });
+    });
+
+    checkHardwareModeAndShowApplyButton();
+}
+
+if (dom.btnApplyCalibration) {
+    dom.btnApplyCalibration.addEventListener("click", async () => {
+        if (!currentState || !currentState.results) return;
+        const res = currentState.results;
+
+        const confirmed = window.confirm(
+            "Confirmar Aplicación de Calibración al ESP32:\n\n" +
+            "¿Está seguro de que desea aplicar los siguientes parámetros calculados a la memoria NVS del ESP32?\n\n" +
+            `GAIN nuevo: ${res.gain.toFixed(6)}\n` +
+            `OFFSET nuevo: ${res.offset.toFixed(6)} kPa\n` +
+            `R²: ${res.r_squared.toFixed(6)}\n` +
+            `Error Máximo: ${res.max_error.toFixed(6)} kPa\n` +
+            `MAE: ${res.mean_absolute_error.toFixed(6)} kPa\n\n` +
+            "Las 4 resistencias del divisor de tensión actuales del dispositivo se conservarán intactas."
+        );
+
+        if (!confirmed) return;
+
+        try {
+            dom.btnApplyCalibration.disabled = true;
+            const resp = await fetch("/api/calibration/apply", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const data = await resp.json();
+            if (!resp.ok) {
+                throw new Error(data.error || `HTTP ${resp.status}`);
+            }
+
+            if (dom.applyNvsAlert) {
+                dom.applyNvsAlert.textContent = data.message || "Calibración aplicada y verificada en NVS";
+                dom.applyNvsAlert.className = "alert alert-success margin-top-sm";
+                dom.applyNvsAlert.classList.remove("hidden");
+            }
+
+            const calib = data.calibration || {};
+            if (dom.nvsGain) dom.nvsGain.textContent = (calib.gain || res.gain).toFixed(6);
+            if (dom.nvsOffset) dom.nvsOffset.textContent = ((calib.offset_kpa || calib.offset || res.offset)).toFixed(6) + " kPa";
+            if (dom.nvsRatio0) dom.nvsRatio0.textContent = calib.ratio_ain0 ? calib.ratio_ain0.toFixed(6) : "—";
+            if (dom.nvsRatio1) dom.nvsRatio1.textContent = calib.ratio_ain1 ? calib.ratio_ain1.toFixed(6) : "—";
+            if (dom.nvsOrigin) dom.nvsOrigin.textContent = calib.origin || "NVS";
+
+            if (dom.applyNvsVerifiedInfo) {
+                dom.applyNvsVerifiedInfo.classList.remove("hidden");
+            }
+        } catch (err) {
+            if (dom.applyNvsAlert) {
+                dom.applyNvsAlert.textContent = `Error al aplicar calibración: ${err.message}`;
+                dom.applyNvsAlert.className = "alert alert-danger margin-top-sm";
+                dom.applyNvsAlert.classList.remove("hidden");
+            }
+        } finally {
+            dom.btnApplyCalibration.disabled = false;
+        }
     });
 }
 

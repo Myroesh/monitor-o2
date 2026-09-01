@@ -6,8 +6,10 @@
 <section class="page-section configuration-page">
     <h1>Configuración e información del equipo</h1>
 
-    <div class="alert alert-info">
-        <strong>Modo Simulación:</strong> Los parámetros editados se mantendrán en la memoria del cliente simulado. La escritura real en la memoria NVS del ESP32 se realizará en fases posteriores.
+    <!-- Mode Status Banner (Simulated vs Real Hardware) -->
+    <div id="mode-banner" class="alert alert-info">
+        <strong id="mode-title">Modo Simulación:</strong>
+        <span id="mode-desc">Los parámetros editados se mantendrán en la memoria del cliente simulado. La escritura real en la memoria NVS del ESP32 se realizará en fases posteriores.</span>
     </div>
 
     <!-- Alert message feedback -->
@@ -113,10 +115,13 @@
             </div>
         </div>
 
-        <!-- Submit Button -->
+        <!-- Submit / Action Buttons -->
         <div class="form-actions">
             <button type="button" id="btn-save-config" class="btn btn-primary">
                 Guardar cambios en simulación
+            </button>
+            <button type="button" id="btn-verify-nvs" class="btn btn-secondary hidden">
+                Verificar escritura NVS
             </button>
         </div>
     </form>

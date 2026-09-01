@@ -135,6 +135,28 @@
             </table>
         </div>
 
+        <!-- Apply Calibration to Real Hardware ESP32 -->
+        <div id="apply-nvs-container" class="card form-card hidden margin-top-md">
+            <h3>Aplicación de Calibración en Hardware Real (ESP32)</h3>
+            <p class="section-desc">Aplica los nuevos GAIN y OFFSET calculados conservando intactas las 4 resistencias actuales del dispositivo.</p>
+            <div class="form-actions">
+                <button type="button" id="btn-apply-calibration" class="btn btn-success">
+                    Aplicar calibración al ESP32
+                </button>
+            </div>
+            <div id="apply-nvs-alert" class="alert hidden margin-top-sm"></div>
+            <div id="apply-nvs-verified-info" class="stats-box hidden margin-top-sm">
+                <h4>Calibración aplicada y verificada en NVS</h4>
+                <div class="stats-grid">
+                    <div class="stat-item"><span class="stat-label">GAIN NVS:</span><span id="nvs-gain">—</span></div>
+                    <div class="stat-item"><span class="stat-label">OFFSET NVS:</span><span id="nvs-offset">—</span></div>
+                    <div class="stat-item"><span class="stat-label">Ratio AIN0:</span><span id="nvs-ratio0">—</span></div>
+                    <div class="stat-item"><span class="stat-label">Ratio AIN1:</span><span id="nvs-ratio1">—</span></div>
+                    <div class="stat-item"><span class="stat-label">Origen:</span><span id="nvs-origin">—</span></div>
+                </div>
+            </div>
+        </div>
+
         <div class="results-actions">
             <button type="button" id="btn-restart-calibration" class="btn btn-secondary">
                 Reiniciar Calibración completa

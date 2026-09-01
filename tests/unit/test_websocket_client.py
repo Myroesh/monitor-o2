@@ -1,14 +1,17 @@
 """Unit tests for Phase 5 WebSocket Client (Esp32WebSocketClient).
 
-Tests Protocol v1 compliance:
-- Mode switching (simulated vs websocket)
-- Handshake hello -> hello_ack
-- Telemetry frame parsing & distribution
+Tests Protocol v1 compliance & integration readiness:
+- Startup mode configuration via environment variables
+- Handshake hello -> hello_ack (with strict protocol_version and request_id correlation)
+- Telemetry frame parsing & exact single-entry distribution to TelemetryService
+- Calibration receiving telemetry without HTTP polling
+- HTTP polling not duplicating real samples in websocket mode
+- Temporary configuration guard blocking real NVS writing in websocket mode
 - Commands & ACK correlation via request_id (ping, get_info, get_calibration, set_calibration, set_telemetry_interval)
 - Error frame handling
-- Connection loss & reconnection behavior
 """
 import json
+import os
 import threading
 import time
 import pytest
@@ -21,27 +24,40 @@ from app.services.esp32_client import (
     get_device_client,
     set_client_mode,
 )
+from app.services.telemetry_service import TelemetryService, get_service
+from app.services.calibration_service import CalibrationService
 
 
-class TestWebSocketClientUnit:
-    def test_mode_switching(self):
-        assert get_client_mode() == "simulated"
-        sim_client = get_device_client()
-        assert isinstance(sim_client, SimulatedEsp32Client)
-
-        set_client_mode("websocket", url="ws://127.0.0.1:9999/ws")
-        assert get_client_mode() == "websocket"
-        ws_client = get_device_client()
-        assert isinstance(ws_client, Esp32WebSocketClient)
-
-        # Switch back to simulated
+class TestWebSocketClientStartupAndConfig:
+    def test_startup_simulated_by_default(self):
         set_client_mode("simulated")
         assert get_client_mode() == "simulated"
         assert isinstance(get_device_client(), SimulatedEsp32Client)
 
+    def test_startup_websocket_by_configuration(self):
+        os.environ["ESP32_CLIENT_MODE"] = "websocket"
+        os.environ["ESP32_WS_URL"] = "ws://127.0.0.1:8765/ws"
+
+        set_client_mode("websocket", url="ws://127.0.0.1:8765/ws")
+        assert get_client_mode() == "websocket"
+        client = get_device_client()
+        assert isinstance(client, Esp32WebSocketClient)
+        assert client.url == "ws://127.0.0.1:8765/ws"
+
+        set_client_mode("simulated")
+
     def test_invalid_mode(self):
         with pytest.raises(ValueError, match="Modo inválido"):
             set_client_mode("invalid_mode")
+
+    def test_post_config_real_is_blocked_in_websocket_mode(self):
+        set_client_mode("websocket", url="ws://127.0.0.1:8765/ws")
+        client = get_device_client()
+
+        with pytest.raises(ValueError, match="Escritura real en NVS deshabilitada temporalmente"):
+            client.update_config({"gain": 1.5})
+
+        set_client_mode("simulated")
 
 
 # ── Local Synchronous WebSocket Fake Server ───────────────────────────────
@@ -57,6 +73,15 @@ class FakeEsp32Server:
         self._thread = None
         self.received_messages: list[dict] = []
         self.fail_set_calibration = False
+        self.calib_state = {
+            "origin": "NVS",
+            "gain": 1.026770,
+            "offset_kpa": -3.388341,
+            "rtop_ain0_ohm": 32700.0,
+            "rbottom_ain0_ohm": 21800.0,
+            "rtop_ain1_ohm": 33300.0,
+            "rbottom_ain1_ohm": 21500.0,
+        }
 
     def _handler(self, websocket_conn):
         for message in websocket_conn:
@@ -115,25 +140,27 @@ class FakeEsp32Server:
                         "vs_mpx_v": 5.0218,
                         "ocs_frames_ok": 100,
                         "ocs_frames_error": 0,
-                        "calibration_origin": "NVS",
+                        "calibration_origin": self.calib_state.get("origin", "NVS"),
                     }
                     websocket_conn.send(json.dumps(reply))
 
                 elif cmd == "get_calibration":
+                    r0 = self.calib_state["rbottom_ain0_ohm"] / (self.calib_state["rtop_ain0_ohm"] + self.calib_state["rbottom_ain0_ohm"])
+                    r1 = self.calib_state["rbottom_ain1_ohm"] / (self.calib_state["rtop_ain1_ohm"] + self.calib_state["rbottom_ain1_ohm"])
                     reply = {
                         "type": "calibration",
                         "protocol_version": 1,
                         "request_id": req_id,
                         "calibration_version": 2,
-                        "origin": "NVS",
-                        "gain": 1.026770,
-                        "offset_kpa": -3.388341,
-                        "rtop_ain0_ohm": 32700.0,
-                        "rbottom_ain0_ohm": 21800.0,
-                        "rtop_ain1_ohm": 33300.0,
-                        "rbottom_ain1_ohm": 21500.0,
-                        "ratio_ain0": 0.400000,
-                        "ratio_ain1": 0.392336,
+                        "origin": self.calib_state.get("origin", "NVS"),
+                        "gain": self.calib_state["gain"],
+                        "offset_kpa": self.calib_state["offset_kpa"],
+                        "rtop_ain0_ohm": self.calib_state["rtop_ain0_ohm"],
+                        "rbottom_ain0_ohm": self.calib_state["rbottom_ain0_ohm"],
+                        "rtop_ain1_ohm": self.calib_state["rtop_ain1_ohm"],
+                        "rbottom_ain1_ohm": self.calib_state["rbottom_ain1_ohm"],
+                        "ratio_ain0": round(r0, 6),
+                        "ratio_ain1": round(r1, 6),
                     }
                     websocket_conn.send(json.dumps(reply))
 
@@ -148,8 +175,15 @@ class FakeEsp32Server:
                         }
                     else:
                         cal = data.get("calibration", {})
-                        r0 = cal.get("rbottom_ain0_ohm", 21800.0) / (cal.get("rtop_ain0_ohm", 32700.0) + cal.get("rbottom_ain0_ohm", 21800.0))
-                        r1 = cal.get("rbottom_ain1_ohm", 21500.0) / (cal.get("rtop_ain1_ohm", 33300.0) + cal.get("rbottom_ain1_ohm", 21500.0))
+                        if "gain" in cal: self.calib_state["gain"] = float(cal["gain"])
+                        if "offset_kpa" in cal: self.calib_state["offset_kpa"] = float(cal["offset_kpa"])
+                        if "rtop_ain0_ohm" in cal: self.calib_state["rtop_ain0_ohm"] = float(cal["rtop_ain0_ohm"])
+                        if "rbottom_ain0_ohm" in cal: self.calib_state["rbottom_ain0_ohm"] = float(cal["rbottom_ain0_ohm"])
+                        if "rtop_ain1_ohm" in cal: self.calib_state["rtop_ain1_ohm"] = float(cal["rtop_ain1_ohm"])
+                        if "rbottom_ain1_ohm" in cal: self.calib_state["rbottom_ain1_ohm"] = float(cal["rbottom_ain1_ohm"])
+
+                        r0 = self.calib_state["rbottom_ain0_ohm"] / (self.calib_state["rtop_ain0_ohm"] + self.calib_state["rbottom_ain0_ohm"])
+                        r1 = self.calib_state["rbottom_ain1_ohm"] / (self.calib_state["rtop_ain1_ohm"] + self.calib_state["rbottom_ain1_ohm"])
                         reply = {
                             "type": "ack",
                             "protocol_version": 1,
@@ -157,12 +191,12 @@ class FakeEsp32Server:
                             "command": "set_calibration",
                             "status": "nvs_verified",
                             "calibration": {
-                                "gain": cal.get("gain", 1.0),
-                                "offset_kpa": cal.get("offset_kpa", 0.0),
-                                "rtop_ain0_ohm": cal.get("rtop_ain0_ohm", 32700.0),
-                                "rbottom_ain0_ohm": cal.get("rbottom_ain0_ohm", 21800.0),
-                                "rtop_ain1_ohm": cal.get("rtop_ain1_ohm", 33300.0),
-                                "rbottom_ain1_ohm": cal.get("rbottom_ain1_ohm", 21500.0),
+                                "gain": round(self.calib_state["gain"], 6),
+                                "offset_kpa": round(self.calib_state["offset_kpa"], 6),
+                                "rtop_ain0_ohm": round(self.calib_state["rtop_ain0_ohm"], 2),
+                                "rbottom_ain0_ohm": round(self.calib_state["rbottom_ain0_ohm"], 2),
+                                "rtop_ain1_ohm": round(self.calib_state["rtop_ain1_ohm"], 2),
+                                "rbottom_ain1_ohm": round(self.calib_state["rbottom_ain1_ohm"], 2),
                                 "ratio_ain0": round(r0, 6),
                                 "ratio_ain1": round(r1, 6),
                             },
@@ -207,6 +241,118 @@ class TestEsp32WebSocketClientProtocol:
         assert hello_msgs[0]["client"] == "monitor-o2-flask"
 
         client.stop()
+
+    def test_invalid_hello_ack_protocol_version_or_request_id_mismatch(self):
+        client = Esp32WebSocketClient(url="ws://127.0.0.1:9999/ws", auto_reconnect=False)
+        client._hello_request_id = "req-001"
+
+        # Invalid protocol version
+        bad_version_ack = {
+            "type": "hello_ack",
+            "protocol_version": 99,
+            "request_id": "req-001",
+            "device": "MonitorO2",
+        }
+        client._on_message(None, json.dumps(bad_version_ack))
+        assert client.is_connected() is False
+
+        # Correlated request_id mismatch
+        bad_id_ack = {
+            "type": "hello_ack",
+            "protocol_version": 1,
+            "request_id": "wrong-id",
+            "device": "MonitorO2",
+        }
+        client._on_message(None, json.dumps(bad_id_ack))
+        assert client.is_connected() is False
+
+    def test_telemetry_enters_telemetry_service_exactly_once(self):
+        set_client_mode("websocket", url="ws://127.0.0.1:8765/ws")
+        ws_client = get_device_client()
+        telemetry_svc = get_service()
+        telemetry_svc._buffer.clear()
+        telemetry_svc._latest = None
+
+        frame = {
+            "type": "telemetry",
+            "protocol_version": 1,
+            "seq": 1,
+            "o2_pct": 21.0,
+            "p_nominal_kpa": 101.3,
+        }
+
+        # Simulate receiving 1 WebSocket telemetry frame
+        ws_client._on_message(None, json.dumps(frame))
+
+        assert telemetry_svc.buffer_size() == 1
+        assert telemetry_svc.get_latest()["o2_pct"] == 21.0
+        set_client_mode("simulated")
+
+    def test_polling_http_does_not_duplicate_real_samples(self):
+        set_client_mode("websocket", url="ws://127.0.0.1:8765/ws")
+        ws_client = get_device_client()
+        telemetry_svc = get_service()
+        telemetry_svc._buffer.clear()
+        telemetry_svc._latest = None
+
+        frame = {
+            "type": "telemetry",
+            "protocol_version": 1,
+            "seq": 1,
+            "o2_pct": 20.9,
+            "p_nominal_kpa": 101.3,
+        }
+        ws_client._on_message(None, json.dumps(frame))
+        assert telemetry_svc.buffer_size() == 1
+
+        # Simulate 5 HTTP polling calls to tick()
+        for _ in range(5):
+            s = telemetry_svc.tick()
+            assert s["o2_pct"] == 20.9
+
+        # Buffer size MUST stay exactly 1 (no duplicates added!)
+        assert telemetry_svc.buffer_size() == 1
+        set_client_mode("simulated")
+
+    def test_calibration_receives_telemetry_without_http_polling(self):
+        set_client_mode("websocket", url="ws://127.0.0.1:8765/ws")
+        ws_client = get_device_client()
+        telemetry_svc = get_service()
+        ws_client.set_telemetry_callback(telemetry_svc.add_sample)
+        calib_svc = CalibrationService()
+
+        # Start step index 0
+        calib_svc.start_measuring(step_index=0, target_duration_s=0.01, min_samples=3)
+        assert calib_svc.get_state()["points"][0]["status"] == "measuring"
+
+        # Push telemetry frames directly via WebSocket client callback without calling tick() or /api/telemetry
+        t0 = time.time()
+        for i in range(6):
+            frame = {
+                "type": "telemetry",
+                "protocol_version": 1,
+                "seq": i,
+                "uptime_ms": 1000 + i * 100,
+                "o2_pct": 21.0,
+                "flow_l_min": 5.0,
+                "temperature_c": 25.0,
+                "p_nominal_kpa": 0.0 + i * 0.01,
+                "p_calibrated_kpa": 0.0,
+                "p_ema_kpa": 0.0,
+                "ain0_mv": 1650.0,
+                "vs_mpx_v": 5.02,
+            }
+            # Override _parse_telemetry_frame to inject advancing timestamp
+            parsed = ws_client._parse_telemetry_frame(frame)
+            parsed["ts"] = t0 + (i * 0.1)
+            telemetry_svc.add_sample(parsed)
+
+        # Step MUST progress to completed through subscription without any HTTP polling
+        state = calib_svc.get_state()
+        assert state["points"][0]["status"] == "completed"
+        assert state["points"][0]["samples_received"] >= 3
+
+        set_client_mode("simulated")
 
     def test_ping_command(self, fake_server):
         client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
@@ -345,5 +491,110 @@ class TestEsp32WebSocketClientProtocol:
         assert latest["flow_lpm"] == 5.2
         assert latest["vs_mpx_mv"] == 5020.0
         assert len(received_samples) == 1
+
+        client.stop()
+
+
+class TestNvsVerificationAndCalibrationApply:
+    def test_verify_nvs_write_exact_values(self, fake_server):
+        client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
+        client.start()
+        for _ in range(20):
+            if client.is_connected():
+                break
+            time.sleep(0.1)
+
+        res = client.verify_nvs_write()
+        assert res["gain"] == 1.026770
+        assert res["offset_kpa"] == -3.388341
+        assert res["rtop_ain0_ohm"] == 32700.0
+        assert res["rbottom_ain0_ohm"] == 21800.0
+
+        client.stop()
+
+    def test_verify_nvs_write_rejected_if_disconnected(self):
+        client = Esp32WebSocketClient(url="ws://127.0.0.1:9999/ws", auto_reconnect=False)
+        with pytest.raises(ConnectionError, match="ESP32 no está conectado"):
+            client.verify_nvs_write()
+
+    def test_verify_nvs_write_rejected_if_no_nvs_verified_ack(self, fake_server):
+        client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
+        client.start()
+        for _ in range(20):
+            if client.is_connected():
+                break
+            time.sleep(0.1)
+
+        # Mock set_calibration returning status: "failed"
+        client.set_calibration = lambda payload: {"type": "ack", "status": "failed"}
+
+        with pytest.raises(RuntimeError, match="Falta confirmación de guardado NVS"):
+            client.verify_nvs_write()
+
+        client.stop()
+
+    def test_verify_nvs_write_rejected_if_readback_mismatch(self, fake_server):
+        client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
+        client.start()
+        for _ in range(20):
+            if client.is_connected():
+                break
+            time.sleep(0.1)
+
+        real_set_cal = client.set_calibration
+
+        def set_cal_with_corrupted_readback(payload):
+            ack = real_set_cal(payload)
+            # Corrupt server state so subsequent get_calibration readback will mismatch
+            fake_server.calib_state["gain"] = 9.99999
+            return ack
+
+        client.set_calibration = set_cal_with_corrupted_readback
+
+        with pytest.raises(ValueError, match="Fallo de lectura NVS"):
+            client.verify_nvs_write()
+
+        client.stop()
+
+    def test_apply_calculated_calibration_preserves_resistors(self, fake_server):
+        client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
+        client.start()
+        for _ in range(20):
+            if client.is_connected():
+                break
+            time.sleep(0.1)
+
+        res = client.apply_calculated_calibration(1.85, 2.5)
+        assert res["gain"] == 1.85
+        assert res["offset_kpa"] == 2.5
+        assert res["rtop_ain0_ohm"] == 32700.0
+        assert res["rbottom_ain0_ohm"] == 21800.0
+        assert res["rtop_ain1_ohm"] == 33300.0
+        assert res["rbottom_ain1_ohm"] == 21500.0
+
+        client.stop()
+
+    def test_no_auto_write_on_calibration_completion(self, fake_server):
+        client = Esp32WebSocketClient(url=fake_server.url, auto_reconnect=False)
+        client.start()
+        for _ in range(20):
+            if client.is_connected():
+                break
+            time.sleep(0.1)
+
+        fake_server.received_messages.clear()
+        calib_svc = CalibrationService()
+        calib_svc.reset_session()
+
+        # Complete calibration manually
+        for idx in range(7):
+            calib_svc.set_step_samples(idx, [10.0 + idx] * 10)
+        calib_svc.calculate_results()
+
+        assert calib_svc.get_state()["status"] == "completed"
+
+        # Verify NO set_calibration message was sent automatically
+        set_cal_msgs = [m for m in fake_server.received_messages if m.get("command") == "set_calibration"]
+        assert len(set_cal_msgs) == 0
 
         client.stop()

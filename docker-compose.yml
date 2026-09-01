@@ -5,4 +5,6 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
+      - ESP32_CLIENT_MODE=${ESP32_CLIENT_MODE:-simulated}
+      - ESP32_WS_URL=${ESP32_WS_URL:-ws://192.168.4.1/ws}
     restart: unless-stopped

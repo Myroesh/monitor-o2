@@ -1,15 +1,18 @@
-"""ESP32 WebSocket client & Simulator — Phase 2, Phase 4 & Phase 5.
+"""ESP32 WebSocket client & Simulator — Phase 2, Phase 4 & Phase 5 (Audited).
 
 Provides both:
 1. Esp32WebSocketClient: Real WebSocket client implementing Protocol v1 (ws://192.168.4.1/ws).
 2. SimulatedEsp32Client: Simulated client for offline development & unit tests.
 
 This module is the ONLY layer that knows about the ESP32 WebSocket protocol.
+It does NOT import TelemetryService or any higher-level service.
 """
 from __future__ import annotations
 
 import json
+import logging
 import math
+import os
 import random
 import threading
 import time
@@ -21,8 +24,14 @@ except ImportError:
     websocket = None
 
 
+logger = logging.getLogger(__name__)
+
 PROTOCOL_VERSION = 1
 DEFAULT_WS_URL = "ws://192.168.4.1/ws"
+
+# Read initial mode & URL from environment variables
+ENV_CLIENT_MODE = os.getenv("ESP32_CLIENT_MODE", "simulated").strip().lower()
+ENV_WS_URL = os.getenv("ESP32_WS_URL", DEFAULT_WS_URL).strip()
 
 
 class SimulatedEsp32Client:
@@ -64,9 +73,14 @@ class SimulatedEsp32Client:
 
     def set_telemetry_callback(self, callback: Callable[[dict], None]) -> None:
         """Register a callback for incoming telemetry samples."""
-        self._telemetry_callback = callback
+        with self._lock:
+            self._telemetry_callback = callback
 
     def is_connected(self) -> bool:
+        """Returns True for simulated client."""
+        return True
+
+    def is_simulated(self) -> bool:
         """Returns True for simulated client."""
         return True
 
@@ -80,6 +94,7 @@ class SimulatedEsp32Client:
         with self._lock:
             gain = self._gain
             offset = self._offset
+            cb = self._telemetry_callback
 
         # Slow sine wave + small random jitter for each variable
         o2 = self._O2_BASE + 0.3 * math.sin(t / 12) + random.gauss(0, 0.05)
@@ -104,11 +119,11 @@ class SimulatedEsp32Client:
             "vs_mpx_mv": round(vs_mpx, 2),
         }
 
-        if self._telemetry_callback:
+        if cb:
             try:
-                self._telemetry_callback(sample)
-            except Exception:
-                pass
+                cb(sample)
+            except Exception as err:
+                logger.error("Error ejecutando callback de telemetría simulada: %s", err, exc_info=True)
 
         return sample
 
@@ -152,14 +167,68 @@ class SimulatedEsp32Client:
 
     def set_calibration(self, calibration: dict[str, Any]) -> dict[str, Any]:
         """Simulated set_calibration command."""
-        return self.update_config({
-            "gain": calibration.get("gain", self._gain),
-            "offset": calibration.get("offset_kpa", self._offset),
-            "rtop_ain0": calibration.get("rtop_ain0_ohm", self._rtop_ain0),
-            "rbottom_ain0": calibration.get("rbottom_ain0_ohm", self._rbottom_ain0),
-            "rtop_ain1": calibration.get("rtop_ain1_ohm", self._rtop_ain1),
-            "rbottom_ain1": calibration.get("rbottom_ain1_ohm", self._rbottom_ain1),
-        })
+        with self._lock:
+            if "gain" in calibration:
+                self._gain = float(calibration["gain"])
+            if "offset_kpa" in calibration:
+                self._offset = float(calibration["offset_kpa"])
+            elif "offset" in calibration:
+                self._offset = float(calibration["offset"])
+            if "rtop_ain0_ohm" in calibration:
+                self._rtop_ain0 = float(calibration["rtop_ain0_ohm"])
+            if "rbottom_ain0_ohm" in calibration:
+                self._rbottom_ain0 = float(calibration["rbottom_ain0_ohm"])
+            if "rtop_ain1_ohm" in calibration:
+                self._rtop_ain1 = float(calibration["rtop_ain1_ohm"])
+            if "rbottom_ain1_ohm" in calibration:
+                self._rbottom_ain1 = float(calibration["rbottom_ain1_ohm"])
+
+            self._calibration_origin = "NVS (Simulado)"
+            ratio0 = self._rbottom_ain0 / (self._rtop_ain0 + self._rbottom_ain0)
+            ratio1 = self._rbottom_ain1 / (self._rtop_ain1 + self._rbottom_ain1)
+
+            return {
+                "type": "ack",
+                "protocol_version": PROTOCOL_VERSION,
+                "command": "set_calibration",
+                "status": "nvs_verified",
+                "calibration": {
+                    "gain": round(self._gain, 6),
+                    "offset_kpa": round(self._offset, 6),
+                    "rtop_ain0_ohm": round(self._rtop_ain0, 2),
+                    "rbottom_ain0_ohm": round(self._rbottom_ain0, 2),
+                    "rtop_ain1_ohm": round(self._rtop_ain1, 2),
+                    "rbottom_ain1_ohm": round(self._rbottom_ain1, 2),
+                    "ratio_ain0": round(ratio0, 6),
+                    "ratio_ain1": round(ratio1, 6),
+                },
+            }
+
+    def verify_nvs_write(self) -> dict[str, Any]:
+        """Perform a safe NVS write & readback test by re-writing current active parameters."""
+        cur = self.get_calibration()
+        ack = self.set_calibration(cur)
+        if ack.get("status") != "nvs_verified":
+            raise RuntimeError("Falta confirmación de guardado NVS (status != nvs_verified)")
+        readback = self.get_calibration()
+        return readback
+
+    def apply_calculated_calibration(self, gain: float, offset_kpa: float) -> dict[str, Any]:
+        """Apply calculated GAIN and OFFSET, preserving current 4 resistors."""
+        cur = self.get_calibration()
+        payload = {
+            "gain": float(gain),
+            "offset_kpa": float(offset_kpa),
+            "rtop_ain0_ohm": float(cur.get("rtop_ain0_ohm", self._rtop_ain0)),
+            "rbottom_ain0_ohm": float(cur.get("rbottom_ain0_ohm", self._rbottom_ain0)),
+            "rtop_ain1_ohm": float(cur.get("rtop_ain1_ohm", self._rtop_ain1)),
+            "rbottom_ain1_ohm": float(cur.get("rbottom_ain1_ohm", self._rbottom_ain1)),
+        }
+        ack = self.set_calibration(payload)
+        if ack.get("status") != "nvs_verified":
+            raise RuntimeError("Falta confirmación de guardado NVS (status != nvs_verified)")
+        readback = self.get_calibration()
+        return readback
 
     def get_device_info(self) -> dict[str, Any]:
         """Return full device status, hardware parameters, and calibration configuration."""
@@ -273,6 +342,7 @@ class Esp32WebSocketClient:
         self._connected = False
         self._lock = threading.Lock()
         self._req_counter = 0
+        self._hello_request_id: str | None = None
 
         self._latest_telemetry: dict[str, Any] | None = None
         self._telemetry_callback: Callable[[dict], None] | None = None
@@ -300,6 +370,10 @@ class Esp32WebSocketClient:
         """Returns True only after successful hello / hello_ack handshake."""
         with self._lock:
             return self._connected
+
+    def is_simulated(self) -> bool:
+        """Returns False for real WebSocket client."""
+        return False
 
     def start(self) -> None:
         """Start the background WebSocket reconnection thread."""
@@ -364,6 +438,7 @@ class Esp32WebSocketClient:
     def _on_open(self, ws: Any) -> None:
         """Send hello handshake immediately upon socket open."""
         req_id = self._next_request_id()
+        self._hello_request_id = req_id
         msg = {
             "type": "hello",
             "protocol_version": PROTOCOL_VERSION,
@@ -381,12 +456,18 @@ class Esp32WebSocketClient:
 
         msg_type = data.get("type")
         req_id = data.get("request_id")
+        proto_ver = data.get("protocol_version")
 
         if msg_type == "hello_ack":
-            with self._lock:
-                self._connected = True
-                self._device_info_cache["firmware_version"] = data.get("firmware_version", "0.1.0")
-                self._device_info_cache["uptime_ms"] = data.get("uptime_ms", 0)
+            # Handshake verification: protocol_version must match and request_id must correlate
+            if proto_ver == PROTOCOL_VERSION and req_id == self._hello_request_id:
+                with self._lock:
+                    self._connected = True
+                    self._device_info_cache["firmware_version"] = data.get("firmware_version", "0.1.0")
+                    self._device_info_cache["uptime_ms"] = data.get("uptime_ms", 0)
+            else:
+                with self._lock:
+                    self._connected = False
 
         elif msg_type == "telemetry":
             sample = self._parse_telemetry_frame(data)
@@ -397,8 +478,8 @@ class Esp32WebSocketClient:
             if cb:
                 try:
                     cb(sample)
-                except Exception:
-                    pass
+                except Exception as err:
+                    logger.error("Error ejecutando callback de telemetría WebSocket: %s", err, exc_info=True)
 
         # Resolve pending command requests if request_id matches
         if req_id and req_id in self._pending_requests:
@@ -541,6 +622,90 @@ class Esp32WebSocketClient:
             "calibration": calibration,
         })
 
+    def verify_nvs_write(self) -> dict[str, Any]:
+        """Perform a safe NVS write & readback test by re-writing current active parameters."""
+        if not self.is_connected():
+            raise ConnectionError("ESP32 no está conectado")
+
+        cur = self.get_calibration()
+        calib_data = cur.get("calibration", cur)
+
+        sent_payload = {
+            "gain": float(calib_data.get("gain", 1.026770)),
+            "offset_kpa": float(calib_data.get("offset_kpa", calib_data.get("offset", -3.388341))),
+            "rtop_ain0_ohm": float(calib_data.get("rtop_ain0_ohm", 32700.0)),
+            "rbottom_ain0_ohm": float(calib_data.get("rbottom_ain0_ohm", 21800.0)),
+            "rtop_ain1_ohm": float(calib_data.get("rtop_ain1_ohm", 33300.0)),
+            "rbottom_ain1_ohm": float(calib_data.get("rbottom_ain1_ohm", 21500.0)),
+        }
+
+        ack = self.set_calibration(sent_payload)
+        status = ack.get("status") if isinstance(ack, dict) else None
+        if status != "nvs_verified":
+            raise RuntimeError(f"Falta confirmación de guardado NVS en el ESP32 (status reportado: '{status}')")
+
+        readback = self.get_calibration()
+        rb_data = readback.get("calibration", readback)
+
+        keys_to_check = [
+            ("gain", "GAIN"),
+            ("offset_kpa", "OFFSET"),
+            ("rtop_ain0_ohm", "Rtop AIN0"),
+            ("rbottom_ain0_ohm", "Rbottom AIN0"),
+            ("rtop_ain1_ohm", "Rtop AIN1"),
+            ("rbottom_ain1_ohm", "Rbottom AIN1"),
+        ]
+
+        for k, label in keys_to_check:
+            sent_val = sent_payload[k]
+            read_val = float(rb_data.get(k, rb_data.get(k.replace("_kpa", ""), 0.0)))
+            if not math.isclose(sent_val, read_val, abs_tol=1e-4):
+                raise ValueError(f"Fallo de lectura NVS en {label}: enviado {sent_val}, leído {read_val}")
+
+        return readback
+
+    def apply_calculated_calibration(self, gain: float, offset_kpa: float) -> dict[str, Any]:
+        """Apply calculated GAIN and OFFSET to ESP32 NVS, preserving current 4 resistors."""
+        if not self.is_connected():
+            raise ConnectionError("ESP32 no está conectado")
+
+        cur = self.get_calibration()
+        calib_data = cur.get("calibration", cur)
+
+        sent_payload = {
+            "gain": float(gain),
+            "offset_kpa": float(offset_kpa),
+            "rtop_ain0_ohm": float(calib_data.get("rtop_ain0_ohm", 32700.0)),
+            "rbottom_ain0_ohm": float(calib_data.get("rbottom_ain0_ohm", 21800.0)),
+            "rtop_ain1_ohm": float(calib_data.get("rtop_ain1_ohm", 33300.0)),
+            "rbottom_ain1_ohm": float(calib_data.get("rbottom_ain1_ohm", 21500.0)),
+        }
+
+        ack = self.set_calibration(sent_payload)
+        status = ack.get("status") if isinstance(ack, dict) else None
+        if status != "nvs_verified":
+            raise RuntimeError(f"Falta confirmación de guardado NVS en el ESP32 (status reportado: '{status}')")
+
+        readback = self.get_calibration()
+        rb_data = readback.get("calibration", readback)
+
+        keys_to_check = [
+            ("gain", "GAIN"),
+            ("offset_kpa", "OFFSET"),
+            ("rtop_ain0_ohm", "Rtop AIN0"),
+            ("rbottom_ain0_ohm", "Rbottom AIN0"),
+            ("rtop_ain1_ohm", "Rtop AIN1"),
+            ("rbottom_ain1_ohm", "Rbottom AIN1"),
+        ]
+
+        for k, label in keys_to_check:
+            sent_val = sent_payload[k]
+            read_val = float(rb_data.get(k, rb_data.get(k.replace("_kpa", ""), 0.0)))
+            if not math.isclose(sent_val, read_val, abs_tol=1e-4):
+                raise ValueError(f"Fallo de lectura NVS en {label}: enviado {sent_val}, leído {read_val}")
+
+        return readback
+
     def get_device_info(self) -> dict[str, Any]:
         """Return full device status, hardware parameters, and calibration config."""
         with self._lock:
@@ -593,41 +758,8 @@ class Esp32WebSocketClient:
         }
 
     def update_config(self, new_config: dict[str, Any]) -> dict[str, Any]:
-        """Validate and update ESP32 configuration via set_calibration command."""
-        gain = float(new_config.get("gain", self._calibration_cache.get("gain", 1.026770)))
-        offset = float(new_config.get("offset", self._calibration_cache.get("offset_kpa", -3.388341)))
-        rtop0 = float(new_config.get("rtop_ain0", self._calibration_cache.get("rtop_ain0_ohm", 32700.0)))
-        rbottom0 = float(new_config.get("rbottom_ain0", self._calibration_cache.get("rbottom_ain0_ohm", 21800.0)))
-        rtop1 = float(new_config.get("rtop_ain1", self._calibration_cache.get("rtop_ain1_ohm", 33300.0)))
-        rbottom1 = float(new_config.get("rbottom_ain1", self._calibration_cache.get("rbottom_ain1_ohm", 21500.0)))
-
-        # Validation rules matching firmware
-        if not (0.10 < gain < 10.0):
-            raise ValueError("GAIN debe estar strictly entre 0.10 y 10.0")
-        if not (-500.0 < offset < 500.0):
-            raise ValueError("OFFSET debe estar estrictamente entre -500.0 y 500.0 kPa")
-        for val, name in [(rtop0, "Rtop AIN0"), (rbottom0, "Rbottom AIN0"), (rtop1, "Rtop AIN1"), (rbottom1, "Rbottom AIN1")]:
-            if not (100.0 <= val <= 1000000.0):
-                raise ValueError(f"{name} debe estar entre 100 Ω y 1,000,000 Ω")
-
-        ratio0 = rbottom0 / (rtop0 + rbottom0)
-        ratio1 = rbottom1 / (rtop1 + rbottom1)
-        if not (0.05 < ratio0 < 0.95):
-            raise ValueError(f"Ratio AIN0 calculado ({ratio0:.4f}) debe estar estrictamente entre 0.05 y 0.95")
-        if not (0.05 < ratio1 < 0.95):
-            raise ValueError(f"Ratio AIN1 calculado ({ratio1:.4f}) debe estar estrictamente entre 0.05 y 0.95")
-
-        calib_payload = {
-            "gain": gain,
-            "offset_kpa": offset,
-            "rtop_ain0_ohm": rtop0,
-            "rbottom_ain0_ohm": rbottom0,
-            "rtop_ain1_ohm": rtop1,
-            "rbottom_ain1_ohm": rbottom1,
-        }
-
-        self.set_calibration(calib_payload)
-        return self.get_device_info()
+        """Temporary Guard for Real Integration: block POST /api/config NVS write in WebSocket mode."""
+        raise ValueError("Escritura real en NVS deshabilitada temporalmente por seguridad")
 
 
 # Module global state for client mode ("simulated" vs "websocket")
@@ -635,27 +767,53 @@ _client_mode = "simulated"
 _simulated_instance = SimulatedEsp32Client()
 _websocket_instance: Esp32WebSocketClient | None = None
 _mode_lock = threading.Lock()
+_mode_change_listeners: list[Callable[[Any], None]] = []
 
 
-def set_client_mode(mode: str, url: str = DEFAULT_WS_URL) -> Any:
+def register_mode_change_listener(listener: Callable[[Any], None]) -> None:
+    """Register a listener to be notified whenever active device client changes."""
+    with _mode_lock:
+        if listener not in _mode_change_listeners:
+            _mode_change_listeners.append(listener)
+        client = _websocket_instance if _client_mode == "websocket" and _websocket_instance else _simulated_instance
+
+    try:
+        listener(client)
+    except Exception as err:
+        logger.error("Error al notificar listener de cambio de modo: %s", err, exc_info=True)
+
+
+def set_client_mode(mode: str, url: str | None = None) -> Any:
     """Set active client mode: 'simulated' or 'websocket'."""
     global _client_mode, _websocket_instance
+    target_url = url or os.getenv("ESP32_WS_URL", DEFAULT_WS_URL).strip()
     with _mode_lock:
         if mode not in ("simulated", "websocket"):
             raise ValueError(f"Modo inválido: '{mode}'. Opciones permitidas: 'simulated', 'websocket'")
 
         _client_mode = mode
         if mode == "websocket":
-            if _websocket_instance is None or _websocket_instance.url != url:
+            if _websocket_instance is None or _websocket_instance.url != target_url:
                 if _websocket_instance:
                     _websocket_instance.stop()
-                _websocket_instance = Esp32WebSocketClient(url=url)
-                _websocket_instance.start()
-            return _websocket_instance
+                _websocket_instance = Esp32WebSocketClient(url=target_url)
+
+            client = _websocket_instance
+            _websocket_instance.start()
         else:
             if _websocket_instance:
                 _websocket_instance.stop()
-            return _simulated_instance
+            client = _simulated_instance
+
+        listeners = list(_mode_change_listeners)
+
+    for listener in listeners:
+        try:
+            listener(client)
+        except Exception as err:
+            logger.error("Error al notificar listener de cambio de modo: %s", err, exc_info=True)
+
+    return client
 
 
 def get_client_mode() -> str:
@@ -670,3 +828,8 @@ def get_device_client() -> SimulatedEsp32Client | Esp32WebSocketClient:
         if _client_mode == "websocket" and _websocket_instance is not None:
             return _websocket_instance
         return _simulated_instance
+
+
+# Auto-initialize mode from environment variables upon module import
+if ENV_CLIENT_MODE in ("simulated", "websocket"):
+    set_client_mode(ENV_CLIENT_MODE, url=ENV_WS_URL)

@@ -16,7 +16,7 @@ Contrato entre la aplicación Flask en la PC y el ESP32.
 - Activación: pulsación larga GPIO27 (~3 s).
 - Pulsación larga nuevamente: cierra inmediatamente modo PC.
 - SoftAP SSID: `MonitorO2-ESP32`
-- Contraseña prototipo: `123456`
+- Contraseña prototipo: `12345678`
 - IP ESP32: `192.168.4.1`
 - WebSocket: `ws://192.168.4.1/ws`
 - Máximo: **1 cliente WebSocket simultáneo**.

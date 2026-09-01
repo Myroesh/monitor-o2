@@ -104,6 +104,35 @@ def calibration_calculate():
     return jsonify(service.calculate_results())
 
 
+@api_bp.route("/calibration/apply", methods=["POST"])
+def calibration_apply():
+    """Apply calculated GAIN and OFFSET to ESP32 NVS, preserving current 4 resistors."""
+    from app.services.esp32_client import get_device_client
+    calib_service = get_calibration_service()
+    state = calib_service.get_state()
+
+    if state.get("status") != "completed" or not state.get("results"):
+        return jsonify({"error": "La calibración no está completa o no tiene resultados válidos"}), 400
+
+    client = get_device_client()
+    if not client.is_connected():
+        return jsonify({"error": "ESP32 no está conectado"}), 400
+
+    results = state["results"]
+    gain = float(results["gain"])
+    offset_kpa = float(results["offset"])
+
+    try:
+        verified_calib = client.apply_calculated_calibration(gain, offset_kpa)
+        return jsonify({
+            "status": "success",
+            "message": "Calibración aplicada y verificada en NVS",
+            "calibration": verified_calib,
+        })
+    except Exception as err:
+        return jsonify({"error": str(err)}), 400
+
+
 # ── Configuration API ──────────────────────────────────────────────────────
 
 @api_bp.route("/config", methods=["GET"])
@@ -124,5 +153,24 @@ def config_update():
         updated_info = client.update_config(data)
         return jsonify(updated_info)
     except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+
+@api_bp.route("/config/verify-nvs", methods=["POST"])
+def config_verify_nvs():
+    """Perform safe NVS write & readback verification on ESP32 without altering active parameters."""
+    from app.services.esp32_client import get_device_client
+    client = get_device_client()
+    if not client.is_connected():
+        return jsonify({"error": "ESP32 no está conectado"}), 400
+
+    try:
+        verified_calib = client.verify_nvs_write()
+        return jsonify({
+            "status": "success",
+            "message": "Escritura en NVS verificada correctamente",
+            "calibration": verified_calib,
+        })
+    except Exception as err:
         return jsonify({"error": str(err)}), 400
 

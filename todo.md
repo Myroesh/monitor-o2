@@ -99,7 +99,7 @@
 - [x] Sustituir simulador sin cambiar rutas ni frontend (modo 'websocket' vs 'simulated').
 - [x] Tests con cliente ESP32 fake/mock WebSocket.
 
-**Estado:** COMPLETADA. pytest 88/88 (host). Implementado cliente WebSocket Protocol v1 en `esp32_client.py`. Handshake hello/hello_ack, comandos parametrizados con `request_id`, gestión de errores y reconexión automática en background.
+**Estado:** COMPLETADA. pytest 105/105 (host). Implementado cliente WebSocket Protocol v1 en `esp32_client.py`. Handshake hello/hello_ack, comandos parametrizados con `request_id`, desacoplamiento total de telemetría a `TelemetryService`, prueba segura de escritura NVS (`verify_nvs_write`) y aplicación de calibración calculada preservando las 4 resistencias del hardware con comprobación obligatoria de ACK `nvs_verified` y relectura (*readback*).
 
 ## Fase 6 — Firmware ESP32 para modo PC
 
