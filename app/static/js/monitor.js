@@ -2,10 +2,10 @@
  * monitor.js — Phase 2 & Phase 5 (Audited & Enhanced)
  * Polls /api/telemetry every 250 ms and updates metric cards + 3 real-time charts:
  * 1. Presión (p_calibrated_kpa / p_ema_kpa / p_nominal_kpa)
- * 2. Pureza de O₂ (o2_pct)
- * 3. Flujo (flow_lpm)
+ * 2. Pureza de O₂ (o2_pct) — invalidates on oxygen_valid === false
+ * 3. Flujo (flow_lpm) — independent of oxygen_valid, valid flow_lpm = 0.0 displayed/plotted
  *
- * Single polling loop, shared history array, invalid sample filtering (oxygen_valid).
+ * Single polling loop, shared history array.
  */
 
 "use strict";
@@ -113,7 +113,7 @@ function updateCharts(history) {
     const o2Dataset = o2Chart.data.datasets[0];
     o2Dataset.data = history.map(s => {
       if (s.oxygen_valid === false || s.o2_pct == null) {
-        return null; // Skip invalid samples without inserting false zero drops
+        return null; // Skip invalid O2 samples without inserting false zero drops
       }
       return s.o2_pct;
     });
@@ -121,12 +121,12 @@ function updateCharts(history) {
     o2Chart.update("none");
   }
 
-  // 3. Update Flow Chart (Filter invalid data when oxygen_valid === false)
+  // 3. Update Flow Chart (Independent of oxygen_valid, only null if flow_lpm not available)
   if (flowChart) {
     const flowDataset = flowChart.data.datasets[0];
     flowDataset.data = history.map(s => {
-      if (s.oxygen_valid === false || s.flow_lpm == null) {
-        return null; // Skip invalid samples without inserting false zero drops
+      if (s.flow_lpm == null) {
+        return null;
       }
       return s.flow_lpm;
     });
@@ -161,7 +161,7 @@ function updateUI(latest, history) {
   if (latest) {
     const o2Valid = latest.oxygen_valid !== false;
     if (els.o2)          els.o2.textContent          = (o2Valid && latest.o2_pct != null) ? fmt(latest.o2_pct, 2) + " %" : "—";
-    if (els.flow)        els.flow.textContent        = (o2Valid && latest.flow_lpm != null) ? fmt(latest.flow_lpm, 2) + " L/min" : "—";
+    if (els.flow)        els.flow.textContent        = latest.flow_lpm != null ? fmt(latest.flow_lpm, 2) + " L/min" : "—";
     if (els.temp)        els.temp.textContent        = fmt(latest.temp_c, 1) + " °C";
     if (els.pCalibrated) els.pCalibrated.textContent = fmt(latest.p_calibrated_kpa, 3) + " kPa";
     if (els.vsMpx)       els.vsMpx.textContent       = fmt(latest.vs_mpx_mv, 1) + " mV";
