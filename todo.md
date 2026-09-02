@@ -103,7 +103,7 @@
 
 ## Fase 6 — Firmware ESP32 para modo PC
 
-- [ ] Guardar firmware actual como respaldo antes de modificar. *(Tarea histórica previa a la modificación; se conserva como referencia documental o a sustituir por respaldo/tag de la versión estable actual)*
+- [ ] Guardar firmware actual como respaldo antes de modificar. *(Al cierre del producto se deberá generar un respaldo/tag de release de la versión estable)*
 - [x] Retirar WiFiManager de la arquitectura final.
 - [x] Mantener Preferences/NVS.
 - [x] Mantener OCS-3F sin modificar parser.
@@ -118,21 +118,23 @@
 - [x] LCD: sin icono = Wi-Fi apagado; parpadeando = esperando Flask; fijo = Flask conectado.
 - [x] ESP32 debe seguir funcionando autónomamente sin Flask.
 
-**Estado:** FUNCIONALMENTE COMPLETADA Y VALIDADA CON HARDWARE REAL.
+**Estado:** COMPLETADA Y VALIDADA CON HARDWARE REAL.
 
 ## Fase 7 — Integración real
 
 - [x] Verificar acceso desde Docker al ESP32 `192.168.4.1`.
 - [x] Conectar PC al SoftAP del ESP32.
 - [x] Reemplazar simulador por WebSocket real.
-- [x] Validar monitor en vivo. *(Comprobados físicamente en hardware real: presión, O₂, flujo, ventana ~60 s y selector P calibrada / EMA / nominal)*
-- [x] Validar calibración completa. *(Calibración guiada de 7 puntos probada y funcional con hardware real; la calibración metrológica definitiva se realizará con la fuente de alimentación final ya que el cero depende de ella)*
-- [ ] Aplicar GAIN/OFFSET desde Flask.
-- [x] Verificar guardado NVS. *(Verificado mediante reescritura segura de los mismos valores activos + ACK nvs_verified + comprobación de readback)*
-- [ ] Reiniciar ESP32 y verificar persistencia.
+- [x] Validar monitor en vivo. *(Comprobado físicamente en hardware real con 3 gráficas simultáneas: presión, O₂, flujo, ventana ~60 s y selector P calibrada / EMA / nominal)*
+- [x] Validar calibración completa.
+- [x] Aplicar GAIN/OFFSET desde Flask.
+- [x] Verificar guardado NVS. *(Verificado mediante reescritura segura de valores activos y aplicación de calibración calculada con ACK nvs_verified + comprobación de readback)*
+- [x] Reiniciar ESP32 y verificar persistencia. *(Verificada la persistencia de parámetros en memoria NVS tras el ciclo de reinicio del dispositivo)*
 - [x] Validar reconexión.
 
-**Estado:** EN PROGRESO / PARCIALMENTE VALIDADA. Integración física de telemetría en vivo, WebSocket real y prueba segura de guardado NVS completados.
+> **Nota:** La cadena completa de calibración y persistencia está funcionalmente validada. Los valores actuales de calibración deben considerarse provisionales porque el cero del sistema ha mostrado dependencia de la alimentación física. La calibración metrológica definitiva se realizará cuando la fuente de alimentación del prototipo sea definitiva.
+
+**Estado:** COMPLETADA Y VALIDADA CON HARDWARE REAL.
 
 ## Fase 8 — Persistencia e historial en PC
 
