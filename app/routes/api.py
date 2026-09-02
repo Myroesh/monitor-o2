@@ -108,6 +108,9 @@ def calibration_calculate():
 def calibration_apply():
     """Apply calculated GAIN and OFFSET to ESP32 NVS, preserving current 4 resistors."""
     from app.services.esp32_client import get_device_client
+    from app.services.calibration_history_service import get_history_service
+    from flask import current_app
+
     calib_service = get_calibration_service()
     state = calib_service.get_state()
 
@@ -124,13 +127,65 @@ def calibration_apply():
 
     try:
         verified_calib = client.apply_calculated_calibration(gain, offset_kpa)
-        return jsonify({
-            "status": "success",
-            "message": "Calibración aplicada y verificada en NVS",
-            "calibration": verified_calib,
-        })
     except Exception as err:
         return jsonify({"error": str(err)}), 400
+
+    # NVS write succeeded! Now attempt SQLite history save cleanly without failing NVS status
+    firmware_version = None
+    try:
+        device_info = client.get_device_info()
+        firmware_version = device_info.get("firmware_version")
+    except Exception:
+        pass
+
+    history_saved = False
+    history_error = None
+    try:
+        db_path = current_app.config.get("CALIBRATION_DB_PATH")
+        history_svc = get_history_service(db_path=db_path)
+        history_svc.save_session(state, firmware_version=firmware_version)
+        history_saved = True
+    except Exception as h_err:
+        current_app.logger.error(f"Failed to save calibration history: {h_err}", exc_info=True)
+        history_saved = False
+        history_error = str(h_err)
+
+    resp: dict[str, Any] = {
+        "status": "success",
+        "message": "Calibración aplicada y verificada en NVS",
+        "calibration": verified_calib,
+        "history_saved": history_saved,
+    }
+    if history_error:
+        resp["history_error"] = history_error
+
+    return jsonify(resp)
+
+
+@api_bp.route("/calibration/history", methods=["GET"])
+def calibration_history_list():
+    """List all saved calibration sessions ordered by saved_at DESC (excluding raw samples)."""
+    from app.services.calibration_history_service import get_history_service
+    from flask import current_app
+
+    db_path = current_app.config.get("CALIBRATION_DB_PATH")
+    history_svc = get_history_service(db_path=db_path)
+    sessions = history_svc.list_sessions()
+    return jsonify(sessions)
+
+
+@api_bp.route("/calibration/history/<session_id>", methods=["GET"])
+def calibration_history_detail(session_id: str):
+    """Return detailed session information including all 7 points, raw samples and timestamps."""
+    from app.services.calibration_history_service import get_history_service
+    from flask import current_app
+
+    db_path = current_app.config.get("CALIBRATION_DB_PATH")
+    history_svc = get_history_service(db_path=db_path)
+    detail = history_svc.get_session_detail(session_id)
+    if detail is None:
+        return jsonify({"error": f"Sesión de calibración '{session_id}' no encontrada"}), 404
+    return jsonify(detail)
 
 
 # ── Configuration API ──────────────────────────────────────────────────────

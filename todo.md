@@ -138,13 +138,15 @@
 
 ## Fase 8 — Persistencia e historial en PC
 
-- [ ] Crear SQLite solo cuando la integración principal sea estable.
-- [ ] Historial de sesiones de calibración.
-- [ ] Guardar puntos crudos y resultados.
-- [ ] Fecha/hora y versión firmware.
-- [ ] GAIN/OFFSET aplicados.
-- [ ] R² y errores.
+- [x] Crear SQLite solo cuando la integración principal sea estable.
+- [x] Historial de sesiones de calibración.
+- [x] Guardar puntos crudos y resultados.
+- [x] Fecha/hora y versión firmware.
+- [x] GAIN/OFFSET aplicados.
+- [x] R² y errores.
 - [ ] Exportación futura si se necesita.
+
+**Estado:** EN PROGRESO / CAPA DE BASE DE DATOS Y REST API DE HISTORIAL IMPLEMENTADAS.
 
 ## Fase 9 — Cierre de producto
 

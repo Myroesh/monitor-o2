@@ -7,4 +7,7 @@ services:
       - FLASK_ENV=production
       - ESP32_CLIENT_MODE=${ESP32_CLIENT_MODE:-simulated}
       - ESP32_WS_URL=${ESP32_WS_URL:-ws://192.168.4.1/ws}
+      - CALIBRATION_DB_PATH=${CALIBRATION_DB_PATH:-/app/data/calibration_history.sqlite3}
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped

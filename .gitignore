@@ -11,5 +11,7 @@ venv/
 ENV/
 instance/
 *.sqlite
+*.sqlite3
 *.db
+data/
 .DS_Store

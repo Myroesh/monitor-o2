@@ -14,10 +14,16 @@ def create_app(config: dict | None = None) -> Flask:
     # Default configuration
     app.config.setdefault("SECRET_KEY", "dev-secret-key-change-in-production")
     app.config.setdefault("TESTING", False)
+    import os
+    app.config.setdefault("CALIBRATION_DB_PATH", os.environ.get("CALIBRATION_DB_PATH", "data/calibration_history.sqlite3"))
 
     # Override with any config passed in (useful for tests)
     if config:
         app.config.update(config)
+
+    # Initialize history service with active db_path
+    from app.services.calibration_history_service import get_history_service
+    get_history_service(db_path=app.config["CALIBRATION_DB_PATH"])
 
     # Register blueprints
     app.register_blueprint(monitor_bp)

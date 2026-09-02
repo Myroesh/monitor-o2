@@ -9,9 +9,11 @@ Consumes telemetry samples as they arrive over time from TelemetryService withou
 """
 from __future__ import annotations
 
+import datetime
 import math
 import threading
 import time
+import uuid
 from typing import Any
 
 from app.services.telemetry_service import get_service
@@ -135,6 +137,8 @@ class CalibrationService:
     def reset_session(self) -> dict[str, Any]:
         """Initialize or reset a calibration session."""
         with self._lock:
+            self._session_id = str(uuid.uuid4())
+            self._created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self._current_step = 0
             self._measuring_step = None
             self._status = "in_progress"
@@ -250,6 +254,8 @@ class CalibrationService:
             points_copy.append(p_dict)
 
         return {
+            "session_id": getattr(self, "_session_id", None),
+            "created_at": getattr(self, "_created_at", None),
             "current_step": self._current_step,
             "total_steps": len(self._points),
             "status": self._status,
