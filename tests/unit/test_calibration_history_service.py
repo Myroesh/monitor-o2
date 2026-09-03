@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import uuid
 import pytest
 
-from app.services.calibration_history_service import CalibrationHistoryService
+from app.services.calibration_history_service import (
+    CalibrationHistoryService,
+    get_history_service,
+    reset_history_service_for_tests,
+)
 
 
 @pytest.fixture
@@ -70,7 +75,7 @@ def sample_complete_session_state(session_id: str | None = None) -> dict:
 
 class TestCalibrationHistoryService:
     def test_schema_auto_creation(self, temp_history_service):
-        """1. Verify tables are automatically created on init."""
+        """1. Verify tables and unique index are automatically created on init."""
         db_path = temp_history_service.db_path
         assert os.path.exists(db_path)
         with temp_history_service._get_connection() as conn:
@@ -82,6 +87,14 @@ class TestCalibrationHistoryService:
             ]
             assert "calibration_sessions" in tables
             assert "calibration_points" in tables
+
+            indices = [
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index';"
+                ).fetchall()
+            ]
+            assert "idx_calibration_points_session_step" in indices
 
     def test_save_and_retrieve_session(self, temp_history_service):
         """2 & 3. Save a complete session and retrieve it."""
@@ -172,7 +185,6 @@ class TestCalibrationHistoryService:
 
         sessions = temp_history_service.list_sessions()
         assert len(sessions) == 2
-        # Verify raw 'points' array is excluded from summary list
         for s in sessions:
             assert "points" not in s
             assert "gain" in s
@@ -181,3 +193,157 @@ class TestCalibrationHistoryService:
     def test_non_existent_session_returns_none(self, temp_history_service):
         """10. Querying non-existent session_id returns None."""
         assert temp_history_service.get_session_detail("non-existent-uuid") is None
+
+    # ── Robustness Audit Tests ───────────────────────────────────────────────
+
+    def test_singleton_reused_with_same_db_path(self, tmp_path):
+        """11. Reuses existing instance when effective db_path is the same."""
+        reset_history_service_for_tests()
+        db_file = str(tmp_path / "singleton.sqlite3")
+
+        svc1 = get_history_service(db_file)
+        # Call again with the same path
+        svc2 = get_history_service(db_file)
+        assert svc1 is svc2
+
+        # Call with redundant relative traversal resolving to the same file
+        equivalent_path = str(tmp_path / "subdir" / ".." / "singleton.sqlite3")
+        svc3 = get_history_service(equivalent_path)
+        assert svc1 is svc3
+        reset_history_service_for_tests()
+
+    def test_new_instance_if_db_path_changes(self, tmp_path):
+        """12. Creates a new instance only when db_path truly changes."""
+        reset_history_service_for_tests()
+        db1 = str(tmp_path / "db1.sqlite3")
+        db2 = str(tmp_path / "db2.sqlite3")
+
+        svc1 = get_history_service(db1)
+        svc2 = get_history_service(db2)
+        assert svc1 is not svc2
+        assert svc1.normalized_db_path != svc2.normalized_db_path
+        reset_history_service_for_tests()
+
+    def test_reject_session_with_status_not_completed(self, temp_history_service):
+        """13. Rejects session whose status is not 'completed'."""
+        state = sample_complete_session_state()
+        state["status"] = "in_progress"
+
+        with pytest.raises(ValueError, match="completed"):
+            temp_history_service.save_session(state)
+
+    def test_reject_session_with_uncompleted_point(self, temp_history_service):
+        """14. Rejects session if any point is not 'completed'."""
+        state = sample_complete_session_state()
+        state["points"][3]["status"] = "measuring"
+
+        with pytest.raises(ValueError, match="no está completado"):
+            temp_history_service.save_session(state)
+
+    def test_reject_session_with_mismatched_samples_and_timestamps(self, temp_history_service):
+        """15. Rejects session if samples and sample_timestamps have different lengths."""
+        state = sample_complete_session_state()
+        state["points"][0]["samples"] = [1.0, 2.0, 3.0]
+        state["points"][0]["sample_timestamps"] = [100.0, 101.0]
+
+        with pytest.raises(ValueError, match="longitudes inconsistentes"):
+            temp_history_service.save_session(state)
+
+    def test_reject_session_with_mismatched_stats_count(self, temp_history_service):
+        """16. Rejects session if stats.count does not match the samples count."""
+        state = sample_complete_session_state()
+        state["points"][1]["stats"]["count"] = 999  # actual len is 3
+
+        with pytest.raises(ValueError, match="inconsistente con el número de muestras"):
+            temp_history_service.save_session(state)
+
+    def test_point_uniqueness_session_step(self, temp_history_service):
+        """17. Unique index prevents duplicate (session_id, step_index) rows."""
+        state = sample_complete_session_state()
+        sid = state["session_id"]
+        temp_history_service.save_session(state)
+
+        with temp_history_service._get_connection() as conn:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    """
+                    INSERT INTO calibration_points (
+                        session_id, step_index, target_mmhg, target_kpa,
+                        observed_mmhg, observed_kpa, sample_count,
+                        mean_p_nominal_kpa, std_p_nominal_kpa, min_p_nominal_kpa,
+                        max_p_nominal_kpa, residual_kpa, samples, sample_timestamps
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        sid,
+                        0,  # step_index 0 already exists for this sid
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        "[]",
+                        "[]",
+                    ),
+                )
+
+    def test_atomic_rollback_on_point_failure(self, temp_history_service, monkeypatch):
+        """18. Atomic transaction: failure during point insertion rolls back session and all points."""
+        state = sample_complete_session_state()
+        sid = state["session_id"]
+
+        real_get_conn = temp_history_service._get_connection
+
+        class FailingCursor:
+            def __init__(self, real_cursor):
+                self._real = real_cursor
+
+            def execute(self, sql, *args):
+                if "INSERT INTO calibration_points" in sql and len(args) > 0 and args[0][1] == 3:
+                    raise sqlite3.OperationalError("Simulated point insertion disk error")
+                return self._real.execute(sql, *args)
+
+            def __getattr__(self, name):
+                return getattr(self._real, name)
+
+        class ProxyConnection:
+            def __init__(self, real_conn):
+                self._real = real_conn
+
+            def cursor(self):
+                return FailingCursor(self._real.cursor())
+
+            def __enter__(self):
+                return self._real.__enter__()
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return self._real.__exit__(exc_type, exc_val, exc_tb)
+
+            def __getattr__(self, name):
+                return getattr(self._real, name)
+
+        monkeypatch.setattr(temp_history_service, "_get_connection", lambda: ProxyConnection(real_get_conn()))
+
+        with pytest.raises(sqlite3.OperationalError, match="Simulated point insertion disk error"):
+            temp_history_service.save_session(state)
+
+        # Verify NO partial session or points were committed
+        monkeypatch.undo()
+
+        assert temp_history_service.get_session_detail(sid) is None
+
+        with temp_history_service._get_connection() as conn:
+            session_count = conn.execute(
+                "SELECT COUNT(*) FROM calibration_sessions WHERE session_id = ?", (sid,)
+            ).fetchone()[0]
+            point_count = conn.execute(
+                "SELECT COUNT(*) FROM calibration_points WHERE session_id = ?", (sid,)
+            ).fetchone()[0]
+
+            assert session_count == 0
+            assert point_count == 0

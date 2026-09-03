@@ -6,21 +6,27 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from app import create_app
-from app.services.calibration_history_service import get_history_service, CalibrationHistoryService
+from app.services.calibration_history_service import (
+    get_history_service,
+    reset_history_service_for_tests,
+    CalibrationHistoryService,
+)
 from app.services.calibration_service import get_calibration_service
 
 
 @pytest.fixture
 def test_app_with_temp_db(tmp_path):
     """Create test Flask app configured with temporary SQLite DB."""
+    reset_history_service_for_tests()
     db_file = str(tmp_path / "integration_history.sqlite3")
     app = create_app({
         "TESTING": True,
         "CALIBRATION_DB_PATH": db_file,
     })
-    # Reset history service singleton to ensure clean test DB
+    # Ensure history service is initialized with test DB
     get_history_service(db_path=db_file)
-    return app
+    yield app
+    reset_history_service_for_tests()
 
 
 @pytest.fixture
@@ -45,6 +51,7 @@ def populate_dummy_history(db_file: str) -> str:
                 "observed_kpa": round(i * 50 * 0.133322, 6),
                 "samples": [1.0, 1.1, 1.2],
                 "sample_timestamps": [100.0, 101.0, 102.0],
+                "status": "completed",
                 "stats": {"count": 3, "mean": 1.1, "std": 0.1, "min": 1.0, "max": 1.2},
             }
             for i in range(7)
