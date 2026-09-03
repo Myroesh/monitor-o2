@@ -387,7 +387,22 @@ if (dom.btnApplyCalibration) {
             }
 
             if (dom.applyNvsAlert) {
-                dom.applyNvsAlert.textContent = data.message || "Calibración aplicada y verificada en NVS";
+                dom.applyNvsAlert.innerHTML = "";
+                const mainMsg = document.createElement("div");
+                mainMsg.textContent = data.message || "Calibración aplicada y verificada en NVS";
+                dom.applyNvsAlert.appendChild(mainMsg);
+
+                const histInfo = document.createElement("div");
+                histInfo.className = "margin-top-xs text-sm";
+                if (data.history_saved === true) {
+                    histInfo.innerHTML = `La calibración también fue guardada en el historial local. <a href="/calibration/history" class="alert-link" id="link-view-history-saved">Ver historial</a>`;
+                } else if (data.history_saved === false) {
+                    const errDetail = data.history_error ? ` (${data.history_error})` : "";
+                    histInfo.textContent = `La calibración fue aplicada al ESP32, pero no pudo guardarse en el historial local.${errDetail}`;
+                    histInfo.className = "margin-top-xs text-sm text-warning";
+                }
+                dom.applyNvsAlert.appendChild(histInfo);
+
                 dom.applyNvsAlert.className = "alert alert-success margin-top-sm";
                 dom.applyNvsAlert.classList.remove("hidden");
             }

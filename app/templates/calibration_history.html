@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Historial de Calibraciones{% endblock %}
+
+{% block content %}
+<section class="page-section calibration-history-page">
+    <div class="page-header-row">
+        <div>
+            <h1>Historial de calibraciones</h1>
+            <p class="section-desc">Calibraciones aplicadas y verificadas en el ESP32 que fueron registradas correctamente en la base de datos local.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('calibration.index') }}" class="btn btn-secondary" id="btn-back-to-calibration">
+                Volver a calibración
+            </a>
+        </div>
+    </div>
+
+    <!-- Error state with Retry -->
+    <div id="history-error-alert" class="alert alert-danger hidden margin-top-md">
+        <span id="history-error-msg">Error al cargar el historial de calibraciones.</span>
+        <button type="button" id="btn-retry-history" class="btn btn-sm btn-secondary margin-left-sm">
+            Reintentar
+        </button>
+    </div>
+
+    <!-- Empty state -->
+    <div id="history-empty-state" class="card empty-state-card hidden text-center margin-top-md">
+        <p class="empty-state-text">Todavía no hay calibraciones guardadas.</p>
+        <div class="margin-top-sm">
+            <a href="{{ url_for('calibration.index') }}" class="btn btn-primary" id="btn-empty-start-calibration">
+                Realizar calibración
+            </a>
+        </div>
+    </div>
+
+    <!-- Sessions list table -->
+    <div id="history-table-container" class="card hidden margin-top-md">
+        <div class="table-wrapper">
+            <table class="table" id="history-table">
+                <thead>
+                    <tr>
+                        <th>Fecha / Hora</th>
+                        <th>Firmware</th>
+                        <th>GAIN</th>
+                        <th>OFFSET (kPa)</th>
+                        <th>R²</th>
+                        <th>Error Máximo (kPa)</th>
+                        <th>MAE (kPa)</th>
+                        <th>Repetibilidad (kPa)</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body">
+                    <!-- Populated dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Session Detail Section (Hidden by default, opened upon clicking "Ver detalle") -->
+    <div id="history-detail-panel" class="card history-detail-card hidden margin-top-lg">
+        <div class="page-header-row">
+            <h2>Detalle de la calibración</h2>
+            <button type="button" id="btn-close-detail" class="btn btn-secondary btn-sm">
+                Cerrar detalle
+            </button>
+        </div>
+
+        <div class="results-grid margin-top-md">
+            <div class="res-card full-width-card">
+                <span class="res-label">Session ID</span>
+                <span id="detail-session-id" class="res-val text-mono">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Firmware</span>
+                <span id="detail-firmware" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Fecha creación</span>
+                <span id="detail-created-at" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Fecha guardado</span>
+                <span id="detail-saved-at" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">GAIN</span>
+                <span id="detail-gain" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">OFFSET (kPa)</span>
+                <span id="detail-offset" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">R²</span>
+                <span id="detail-r2" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Error Máximo (kPa)</span>
+                <span id="detail-max-error" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">MAE (kPa)</span>
+                <span id="detail-mae" class="res-val">—</span>
+            </div>
+            <div class="res-card">
+                <span class="res-label">Repetibilidad (kPa)</span>
+                <span id="detail-repeatability" class="res-val">—</span>
+            </div>
+        </div>
+
+        <!-- Points Table in Detail -->
+        <div class="margin-top-lg">
+            <h3>Detalle por Punto de Medición</h3>
+            <div class="table-wrapper margin-top-sm">
+                <table class="table" id="detail-points-table">
+                    <thead>
+                        <tr>
+                            <th>Paso</th>
+                            <th>Objetivo (mmHg)</th>
+                            <th>Objetivo (kPa)</th>
+                            <th>Observado (mmHg)</th>
+                            <th>Observado (kPa)</th>
+                            <th>Promedio P nominal (kPa)</th>
+                            <th>Desv. estándar (kPa)</th>
+                            <th>Mínimo (kPa)</th>
+                            <th>Máximo (kPa)</th>
+                            <th>Muestras</th>
+                            <th>Residuo (kPa)</th>
+                            <th>Muestras Crudas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detail-points-table-body">
+                        <!-- Populated dynamically by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/calibration_history.js') }}"></script>
+{% endblock %}

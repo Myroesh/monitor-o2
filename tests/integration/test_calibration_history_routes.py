@@ -192,3 +192,75 @@ class TestCalibrationHistoryRoutes:
             assert data["history_saved"] is False
             assert "history_error" in data
             assert "SQLite write permission denied" in data["history_error"]
+
+    # ── UI & Template Integration Tests ──────────────────────────────────────
+
+    def test_get_calibration_history_page_200(self, client):
+        """GET /calibration/history returns HTTP 200 and renders history template."""
+        res = client.get("/calibration/history")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert "Historial de calibraciones" in html
+        assert "calibration_history.js" in html
+
+    def test_calibration_history_page_contains_containers(self, client):
+        """History page contains table container, detail panel, error alert, and back button."""
+        res = client.get("/calibration/history")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'id="history-table-container"' in html
+        assert 'id="history-table"' in html
+        assert 'id="history-detail-panel"' in html
+        assert 'id="detail-points-table"' in html
+        assert 'id="btn-back-to-calibration"' in html
+        assert 'Volver a calibración' in html
+
+    def test_calibration_page_has_link_to_history(self, client):
+        """GET /calibration contains visible navigation link to calibration history."""
+        res = client.get("/calibration/")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert "Ver historial de calibraciones" in html
+        assert 'href="/calibration/history"' in html
+
+    def test_history_empty_state_elements(self, client):
+        """History page has empty state markup with link to start calibration."""
+        res = client.get("/calibration/history")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'id="history-empty-state"' in html
+        assert "Todavía no hay calibraciones guardadas." in html
+        assert 'id="btn-empty-start-calibration"' in html
+        assert 'href="/calibration/"' in html
+
+    def test_read_only_guarantees(self, client):
+        """History template and JS contain no delete/edit/remove mutation controls."""
+        res = client.get("/calibration/history")
+        html = res.get_data(as_text=True).lower()
+        assert "btn-delete" not in html
+        assert "btn-edit" not in html
+        assert "eliminar" not in html
+        assert "borrar" not in html
+
+    def test_calibration_page_controls_preserved(self, client):
+        """Standard calibration page retains all wizard, measure, stepper, and apply controls."""
+        res = client.get("/calibration/")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'id="wizard-card"' in html
+        assert 'id="btn-start-measure"' in html
+        assert 'id="btn-prev-step"' in html
+        assert 'id="btn-repeat-step"' in html
+        assert 'id="btn-next-step"' in html
+        assert 'id="points-table"' in html
+        assert 'id="btn-apply-calibration"' in html
+
+    def test_calibration_js_history_saved_feedback_strings(self):
+        """calibration.js contains proper feedback logic for history_saved true and false."""
+        import pathlib
+        js_path = pathlib.Path("app/static/js/calibration.js")
+        content = js_path.read_text(encoding="utf-8")
+        assert "La calibración también fue guardada en el historial local." in content
+        assert "La calibración fue aplicada al ESP32, pero no pudo guardarse en el historial local." in content
+        assert "/calibration/history" in content
+

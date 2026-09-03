@@ -144,9 +144,10 @@
 - [x] Fecha/hora y versión firmware.
 - [x] GAIN/OFFSET aplicados.
 - [x] R² y errores.
+- [x] Interfaz de consulta del historial de calibraciones.
 - [ ] Exportación futura si se necesita.
 
-**Estado:** EN PROGRESO / CAPA DE BASE DE DATOS Y REST API DE HISTORIAL IMPLEMENTADAS.
+**Estado:** EN PROGRESO / CONSULTA DE HISTORIAL IMPLEMENTADA; EXPORTACIÓN PENDIENTE DE DECISIÓN.
 
 ## Fase 9 — Cierre de producto
 

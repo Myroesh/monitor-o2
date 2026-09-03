@@ -4,7 +4,12 @@
 
 {% block content %}
 <section class="page-section calibration-page">
-    <h1>Calibración del sensor (guiada)</h1>
+    <div class="page-header-row">
+        <h1>Calibración del sensor (guiada)</h1>
+        <a href="{{ url_for('calibration.history') }}" class="btn btn-secondary" id="btn-view-history">
+            Ver historial de calibraciones
+        </a>
+    </div>
 
     <!-- Stepper indicator bar -->
     <div id="calibration-stepper" class="stepper-container">

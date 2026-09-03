@@ -8,3 +8,10 @@ calibration_bp = Blueprint("calibration", __name__, url_prefix="/calibration")
 def index():
     """Sensor calibration page."""
     return render_template("calibration.html")
+
+
+@calibration_bp.route("/history")
+def history():
+    """Sensor calibration history page."""
+    return render_template("calibration_history.html")
+
